@@ -27,8 +27,8 @@ function createWindow() {
   if (process.env.NODE_ENV === 'development') {
     // Development mode: load from Vite dev server
     mainWindow.loadURL('http://localhost:3000');
-    // Open DevTools in development
-    mainWindow.webContents.openDevTools();
+    // DevTools disabled for cleaner output
+    // mainWindow.webContents.openDevTools();
   } else {
     // Production mode: load built files
     mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
@@ -205,15 +205,23 @@ app.whenReady().then(async () => {
   try {
     const module = await import('./crawlers/bookingCrawler.js');
     BookingCrawler = module.default;
+    if (!BookingCrawler) {
+      throw new Error('BookingCrawler default export is undefined');
+    }
   } catch (error) {
     console.error('Failed to load BookingCrawler:', error);
+    // Continue without crawler - app can still function for viewing data
   }
 
   // Initialize database
   try {
     taskDb = new TaskDatabase();
+    if (!taskDb) {
+      throw new Error('TaskDatabase initialization failed');
+    }
   } catch (error) {
     console.error('Failed to initialize database:', error);
+    // Continue without database - app can still function
   }
 
   // Setup IPC handlers

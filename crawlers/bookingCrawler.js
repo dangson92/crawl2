@@ -716,12 +716,6 @@ class BookingCrawler {
         crawledAt: new Date().toISOString(),
       };
 
-        name,
-        facilitiesCount: facilities?.length || 0,
-        faqsCount: faqs?.length || 0,
-        hasHouseRules: !!houseRules,
-        imagesCount: images?.length || 0
-      });
       return result;
     } catch (error) {
       throw error;
