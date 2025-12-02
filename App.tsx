@@ -8,47 +8,12 @@ import LogConsole from './components/LogConsole';
 import ResultModal from './components/ResultModal';
 import { exportToExcel } from './utils/excelGenerator';
 
-// Mock function to simulate scraping
-// In a real Electron app, this would use Puppeteer/Playwright
-const simulateCrawl = async (url: string, logCallback: (msg: string, type?: LogEntry['type']) => void): Promise<HotelData> => {
-  logCallback(`Initializing browser context...`, 'info');
-  await new Promise(r => setTimeout(r, 800));
-  
-  logCallback(`Navigating to ${url}...`, 'info');
-  await new Promise(r => setTimeout(r, 1500));
-  
-  logCallback(`Page loaded. Analyzing DOM structure...`, 'info');
-  await new Promise(r => setTimeout(r, 1000));
-
-  if (Math.random() > 0.9) {
-    throw new Error("Network timeout or blocked by anti-bot protection.");
-  }
-
-  logCallback(`Found 'photosGallery' tab. Clicking to open popup...`, 'warning');
-  await new Promise(r => setTimeout(r, 1200));
-
-  logCallback(`Popup active. Scrolling to load all images (Lazy loading)...`, 'info');
-  await new Promise(r => setTimeout(r, 2000));
-
-  const imageCount = Math.floor(Math.random() * 20) + 5;
-  logCallback(`Extraction complete. Found ${imageCount} high-res images.`, 'success');
-  
-  // Return mock data
-  return {
-    name: `Hotel Mock Result ${Math.floor(Math.random() * 1000)}`,
-    address: `${Math.floor(Math.random() * 100)} Nguyen Hue Street, District 1, HCMC`,
-    rating: parseFloat((Math.random() * 2 + 7).toFixed(1)),
-    price: `${(Math.random() * 2000000 + 500000).toLocaleString('vi-VN')} VND`,
-    images: Array.from({ length: imageCount }).map((_, i) => `https://picsum.photos/seed/${Math.random()}/800/600`),
-  };
-};
-
 const INITIAL_CONFIG: AppConfig = {
   concurrency: 2,
   delayPerLink: 2,
   batchWait: 10,
   batchWaitTime: 30,
-  headless: false,
+  headless: false, // false = show browser, true = hide browser
   userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36...'
 };
 
@@ -62,6 +27,7 @@ export default function App() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [globalLogs, setGlobalLogs] = useState<LogEntry[]>([]);
   const [showConfig, setShowConfig] = useState(false);
+  const [chromePath, setChromePath] = useState<string | null>(null);
 
   // Refs for logic that runs in intervals/timeouts
   const queueRef = useRef(queue);
@@ -74,6 +40,29 @@ export default function App() {
   useEffect(() => { runningRef.current = isRunning; }, [isRunning]);
   useEffect(() => { configRef.current = config; }, [config]);
   useEffect(() => { activeCountRef.current = activeTaskCount; }, [activeTaskCount]);
+
+  // Find Chrome path on mount (only in Electron)
+  useEffect(() => {
+    if (window.isElectron && window.electron?.crawler) {
+      window.electron.crawler.findChrome().then(result => {
+        if (result.success && result.path) {
+          setChromePath(result.path);
+          addLog(`Chrome found: ${result.path}`, 'success');
+        } else {
+          addLog('Chrome not found. Will use bundled Chromium.', 'warning');
+        }
+      }).catch(err => {
+        addLog(`Error finding Chrome: ${err.message}`, 'error');
+      });
+
+      // Setup crawler log listener
+      const unsubscribe = window.electron.crawler.onCrawlerLog(({ taskId, message, type }) => {
+        addLog(message, type as LogEntry['type'], taskId);
+      });
+
+      return () => unsubscribe();
+    }
+  }, []);
 
   // Logging Helper
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info', taskId?: string) => {
@@ -98,44 +87,78 @@ export default function App() {
 
     try {
       addLog(`Starting task ${task.id}`, 'info', task.id);
-      
-      const result = await simulateCrawl(task.url, (msg, type) => addLog(msg, type, task.id));
-      
-      setQueue(prev => prev.map(t => 
-        t.id === task.id 
-          ? { 
-              ...t, 
-              status: TaskStatus.COMPLETED, 
-              result, 
-              progress: 100, 
-              finishedAt: Date.now() 
-            } 
+
+      let result: HotelData;
+
+      // Check if running in Electron with crawler API
+      if (window.isElectron && window.electron?.crawler) {
+        // Use real crawler in Electron
+        const response = await window.electron.crawler.crawlHotel(
+          task.id,
+          task.url,
+          configRef.current.headless,
+          chromePath
+        );
+
+        if (!response.success) {
+          throw new Error(response.error || 'Crawl failed');
+        }
+
+        // Map crawler data to HotelData format
+        const crawlerData = response.data;
+        result = {
+          name: crawlerData.name || 'Unknown Hotel',
+          address: crawlerData.address || 'No address',
+          rating: crawlerData.rating?.score || 0,
+          price: 'N/A', // Booking.com doesn't always show price
+          images: crawlerData.images || [],
+          // Store additional data
+          facilities: crawlerData.facilities,
+          faqs: crawlerData.faqs,
+          about: crawlerData.about,
+          reviewCount: crawlerData.rating?.reviewCount,
+          ratingCategory: crawlerData.rating?.category,
+        };
+      } else {
+        // Fallback: not in Electron or crawler not available
+        throw new Error('Crawler not available. Please run in Electron app.');
+      }
+
+      setQueue(prev => prev.map(t =>
+        t.id === task.id
+          ? {
+              ...t,
+              status: TaskStatus.COMPLETED,
+              result,
+              progress: 100,
+              finishedAt: Date.now()
+            }
           : t
       ));
       addLog(`Task ${task.id} finished successfully.`, 'success', task.id);
 
     } catch (err: any) {
-      setQueue(prev => prev.map(t => 
-        t.id === task.id 
-          ? { 
-              ...t, 
-              status: TaskStatus.ERROR, 
-              error: err.message, 
-              finishedAt: Date.now() 
-            } 
+      setQueue(prev => prev.map(t =>
+        t.id === task.id
+          ? {
+              ...t,
+              status: TaskStatus.ERROR,
+              error: err.message,
+              finishedAt: Date.now()
+            }
           : t
       ));
       addLog(`Task ${task.id} failed: ${err.message}`, 'error', task.id);
     } finally {
       setActiveTaskCount(prev => prev - 1);
-      
+
       // Delay before slot frees up logically (simulating cleanup)
       setTimeout(() => {
         // Trigger next loop check
         checkQueue();
       }, configRef.current.delayPerLink * 1000);
     }
-  }, [addLog]);
+  }, [addLog, chromePath]);
 
   // Queue Checker Loop
   const checkQueue = useCallback(() => {
@@ -312,8 +335,13 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center justify-between pt-2 px-1">
-                  <span className="text-sm font-medium text-gray-600">Headless Browser</span>
-                  <button 
+                  <div>
+                    <span className="text-sm font-medium text-gray-600">Hide Browser</span>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {config.headless ? 'Browser hidden (headless)' : 'Browser visible'}
+                    </p>
+                  </div>
+                  <button
                     onClick={() => setConfig({...config, headless: !config.headless})}
                     className={`w-11 h-6 rounded-full relative transition-all shadow-inner ${config.headless ? 'bg-blue-600' : 'bg-gray-200'}`}
                   >

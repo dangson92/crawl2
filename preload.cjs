@@ -9,13 +9,28 @@ contextBridge.exposeInMainWorld('electron', {
     chrome: process.versions.chrome,
     electron: process.versions.electron,
   },
-  // Add any IPC methods here if needed in the future
-  // send: (channel, data) => {
-  //   ipcRenderer.send(channel, data);
-  // },
-  // on: (channel, func) => {
-  //   ipcRenderer.on(channel, (event, ...args) => func(...args));
-  // },
+
+  // Crawler APIs
+  crawler: {
+    // Find Chrome executable path
+    findChrome: () => ipcRenderer.invoke('find-chrome'),
+
+    // Start crawling a hotel
+    crawlHotel: (taskId, url, headless, chromePath) =>
+      ipcRenderer.invoke('crawl-hotel', { taskId, url, headless, chromePath }),
+
+    // Stop a crawl task
+    stopCrawl: (taskId) =>
+      ipcRenderer.invoke('stop-crawl', { taskId }),
+
+    // Listen to crawler logs
+    onCrawlerLog: (callback) => {
+      const subscription = (event, data) => callback(data);
+      ipcRenderer.on('crawler-log', subscription);
+      // Return unsubscribe function
+      return () => ipcRenderer.removeListener('crawler-log', subscription);
+    },
+  },
 });
 
 // Indicate that app is running in Electron
