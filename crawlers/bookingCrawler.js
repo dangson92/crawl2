@@ -64,6 +64,40 @@ class BookingCrawler {
   }
 
   /**
+   * Extract JSON-LD schema data from page
+   */
+  async getSchemaData() {
+    try {
+      const schemaData = await this.page.evaluate(() => {
+        const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+        for (const script of scripts) {
+          try {
+            const data = JSON.parse(script.textContent);
+            // Look for Hotel schema
+            if (data['@type'] === 'Hotel' || data['@type'] === 'LodgingBusiness') {
+              return data;
+            }
+            // Sometimes it's wrapped in an array or graph
+            if (data['@graph']) {
+              const hotelData = data['@graph'].find(item =>
+                item['@type'] === 'Hotel' || item['@type'] === 'LodgingBusiness'
+              );
+              if (hotelData) return hotelData;
+            }
+          } catch (e) {
+            // Skip invalid JSON
+          }
+        }
+        return null;
+      });
+      return schemaData;
+    } catch (error) {
+      console.error('Error getting schema data:', error.message);
+      return null;
+    }
+  }
+
+  /**
    * Wait for element with timeout
    */
   async waitForElement(selector, timeout = this.options.timeout) {
@@ -79,10 +113,15 @@ class BookingCrawler {
   /**
    * Get hotel name
    */
-  async getHotelName() {
+  async getHotelName(schemaData = null) {
     try {
+      // Try to get from schema first
+      if (schemaData && schemaData.name) {
+        return schemaData.name;
+      }
+
+      // Fallback to DOM selectors
       const name = await this.page.evaluate(() => {
-        // Try multiple selectors
         const selectors = [
           'h2.pp-header__title',
           'h2[data-testid="property-name"]',
@@ -108,10 +147,22 @@ class BookingCrawler {
   /**
    * Get hotel address
    */
-  async getAddress() {
+  async getAddress(schemaData = null) {
     try {
+      // Try to get from schema first
+      if (schemaData && schemaData.address) {
+        const addr = schemaData.address;
+        if (typeof addr === 'string') {
+          return addr;
+        }
+        // If it's a structured address object
+        if (addr.streetAddress) {
+          return addr.streetAddress;
+        }
+      }
+
+      // Fallback to DOM selectors
       const address = await this.page.evaluate(() => {
-        // Try multiple selectors
         const selectors = [
           '[data-testid="address"]',
           '.hp_address_subtitle',
@@ -137,76 +188,110 @@ class BookingCrawler {
   /**
    * Get hotel rating
    */
-  async getRating() {
+  async getRating(schemaData = null) {
     try {
-      const rating = await this.page.evaluate(() => {
-        const result = {
-          score: null,
-          reviewCount: null,
-          category: null
-        };
+      const result = {
+        score: null,
+        reviewCount: null,
+        category: null
+      };
 
-        // Try to get score
-        const scoreSelectors = [
-          '[data-testid="review-score-component"] div[aria-label]',
-          '.b5cd09854e.d10a6220b4',
-          '.a3b8729ab1.d86cee9b25',
-        ];
-
-        for (const selector of scoreSelectors) {
-          const element = document.querySelector(selector);
-          if (element) {
-            const text = element.textContent.trim();
-            const scoreMatch = text.match(/(\d+\.?\d*)/);
-            if (scoreMatch) {
-              result.score = parseFloat(scoreMatch[1]);
-              break;
-            }
-          }
+      // Try to get from schema first
+      if (schemaData && schemaData.aggregateRating) {
+        const aggRating = schemaData.aggregateRating;
+        if (aggRating.ratingValue) {
+          result.score = parseFloat(aggRating.ratingValue);
         }
-
-        // Try to get review count
-        const reviewSelectors = [
-          '[data-testid="review-score-component"]',
-          '.d8eab2cf7f.c90c0a70d3',
-        ];
-
-        for (const selector of reviewSelectors) {
-          const element = document.querySelector(selector);
-          if (element) {
-            const text = element.textContent;
-            const countMatch = text.match(/(\d{1,3}(,\d{3})*)/);
-            if (countMatch) {
-              result.reviewCount = parseInt(countMatch[1].replace(/,/g, ''));
-              break;
-            }
-          }
+        if (aggRating.reviewCount) {
+          result.reviewCount = parseInt(aggRating.reviewCount);
         }
+      }
 
-        // Try to get category
-        const categorySelectors = [
-          '[data-testid="review-score-component"]',
-        ];
+      // If we got both from schema, determine category based on score
+      if (result.score) {
+        if (result.score >= 9) result.category = 'Excellent';
+        else if (result.score >= 8) result.category = 'Very Good';
+        else if (result.score >= 7) result.category = 'Good';
+        else if (result.score >= 6) result.category = 'Pleasant';
+        else result.category = 'Fair';
+      }
 
-        for (const selector of categorySelectors) {
-          const element = document.querySelector(selector);
-          if (element) {
-            const text = element.textContent;
-            // Extract words like "Excellent", "Very Good", etc.
-            const words = ['Excellent', 'Very Good', 'Good', 'Pleasant', 'Fair', 'Review score'];
-            for (const word of words) {
-              if (text.includes(word)) {
-                result.category = word;
+      // Fallback to DOM selectors if schema didn't provide data
+      if (!result.score || !result.reviewCount) {
+        const domRating = await this.page.evaluate(() => {
+          const domResult = {
+            score: null,
+            reviewCount: null,
+            category: null
+          };
+
+          // Try to get score
+          const scoreSelectors = [
+            '[data-testid="review-score-component"] div[aria-label]',
+            '.b5cd09854e.d10a6220b4',
+            '.a3b8729ab1.d86cee9b25',
+          ];
+
+          for (const selector of scoreSelectors) {
+            const element = document.querySelector(selector);
+            if (element) {
+              const text = element.textContent.trim();
+              const scoreMatch = text.match(/(\d+\.?\d*)/);
+              if (scoreMatch) {
+                domResult.score = parseFloat(scoreMatch[1]);
                 break;
               }
             }
-            if (result.category) break;
           }
-        }
 
-        return result;
-      });
-      return rating;
+          // Try to get review count
+          const reviewSelectors = [
+            '[data-testid="review-score-component"]',
+            '.d8eab2cf7f.c90c0a70d3',
+          ];
+
+          for (const selector of reviewSelectors) {
+            const element = document.querySelector(selector);
+            if (element) {
+              const text = element.textContent;
+              const countMatch = text.match(/(\d{1,3}(,\d{3})*)/);
+              if (countMatch) {
+                domResult.reviewCount = parseInt(countMatch[1].replace(/,/g, ''));
+                break;
+              }
+            }
+          }
+
+          // Try to get category
+          const categorySelectors = [
+            '[data-testid="review-score-component"]',
+          ];
+
+          for (const selector of categorySelectors) {
+            const element = document.querySelector(selector);
+            if (element) {
+              const text = element.textContent;
+              const words = ['Excellent', 'Very Good', 'Good', 'Pleasant', 'Fair', 'Review score'];
+              for (const word of words) {
+                if (text.includes(word)) {
+                  domResult.category = word;
+                  break;
+                }
+              }
+              if (domResult.category) break;
+            }
+          }
+
+          return domResult;
+        });
+
+        // Use DOM data as fallback
+        if (!result.score && domRating.score) result.score = domRating.score;
+        if (!result.reviewCount && domRating.reviewCount) result.reviewCount = domRating.reviewCount;
+        if (!result.category && domRating.category) result.category = domRating.category;
+      }
+
+      return result;
     } catch (error) {
       console.error('Error getting rating:', error.message);
       return null;
@@ -295,8 +380,14 @@ class BookingCrawler {
   /**
    * Get about/description
    */
-  async getAbout() {
+  async getAbout(schemaData = null) {
     try {
+      // Try to get from schema first
+      if (schemaData && schemaData.description) {
+        return schemaData.description;
+      }
+
+      // Fallback to DOM selectors
       const about = await this.page.evaluate(() => {
         const selectors = [
           '[data-testid="property-description"]',
@@ -342,30 +433,46 @@ class BookingCrawler {
       const images = await this.page.evaluate(() => {
         const result = [];
 
-        // Try different selectors for gallery images
-        const imageSelectors = [
-          '[data-testid="gallery-image"] img',
-          '.bh-photo-grid-item img',
-          '.hotel-photo-carousel img',
-          '.photo-gallery img',
-          'img[data-testid="image"]',
-          '.gallery-image img',
-        ];
-
-        for (const selector of imageSelectors) {
-          const elements = document.querySelectorAll(selector);
-          if (elements.length > 0) {
-            elements.forEach(img => {
+        // Priority 1: Look for picture elements with lazy-image-image
+        const pictureElements = document.querySelectorAll('picture[data-testid="lazy-image-image"]');
+        if (pictureElements.length > 0) {
+          pictureElements.forEach(picture => {
+            const img = picture.querySelector('img');
+            if (img) {
               const src = img.src || img.dataset.src || img.getAttribute('data-lazy-src');
               if (src && !result.includes(src) && src.startsWith('http')) {
                 result.push(src);
               }
-            });
-            if (result.length > 0) break;
+            }
+          });
+        }
+
+        // Priority 2: If no picture elements found, try other selectors
+        if (result.length === 0) {
+          const imageSelectors = [
+            '[data-testid="gallery-image"] img',
+            '.bh-photo-grid-item img',
+            '.hotel-photo-carousel img',
+            '.photo-gallery img',
+            'img[data-testid="image"]',
+            '.gallery-image img',
+          ];
+
+          for (const selector of imageSelectors) {
+            const elements = document.querySelectorAll(selector);
+            if (elements.length > 0) {
+              elements.forEach(img => {
+                const src = img.src || img.dataset.src || img.getAttribute('data-lazy-src');
+                if (src && !result.includes(src) && src.startsWith('http')) {
+                  result.push(src);
+                }
+              });
+              if (result.length > 0) break;
+            }
           }
         }
 
-        // If no images found in gallery, try to get from main page
+        // Priority 3: Fallback - get from main page
         if (result.length === 0) {
           const allImages = document.querySelectorAll('img');
           allImages.forEach(img => {
@@ -411,14 +518,23 @@ class BookingCrawler {
 
       console.log('Extracting hotel information...');
 
-      // Get all information
+      // First, try to get structured data from JSON-LD schema
+      console.log('Extracting JSON-LD schema data...');
+      const schemaData = await this.getSchemaData();
+      if (schemaData) {
+        console.log('Found JSON-LD schema data');
+      } else {
+        console.log('No JSON-LD schema found, will use DOM selectors');
+      }
+
+      // Get all information (pass schemaData to use as primary source)
       const [name, address, rating, facilities, faqs, about] = await Promise.all([
-        this.getHotelName(),
-        this.getAddress(),
-        this.getRating(),
+        this.getHotelName(schemaData),
+        this.getAddress(schemaData),
+        this.getRating(schemaData),
         this.getFacilities(),
         this.getFAQs(),
-        this.getAbout(),
+        this.getAbout(schemaData),
       ]);
 
       // Get images separately as it requires navigation
