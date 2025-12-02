@@ -64,6 +64,36 @@ export default function App() {
     }
   }, []);
 
+  // Load tasks from database on mount
+  useEffect(() => {
+    if (window.isElectron && window.electron?.db) {
+      window.electron.db.getAllTasks().then(result => {
+        if (result.success && result.data) {
+          setQueue(result.data);
+          addLog(`Loaded ${result.data.length} tasks from database`, 'info');
+        }
+      }).catch(err => {
+        addLog(`Error loading tasks: ${err.message}`, 'error');
+      });
+    }
+  }, []);
+
+  // Auto-save tasks to database when queue changes
+  useEffect(() => {
+    if (window.isElectron && window.electron?.db && queue.length > 0) {
+      // Debounce save to avoid too frequent writes
+      const timeoutId = setTimeout(() => {
+        queue.forEach(task => {
+          window.electron.db.saveTask(task).catch(err => {
+            console.error(`Error saving task ${task.id}:`, err);
+          });
+        });
+      }, 500);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [queue]);
+
   // Logging Helper
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info', taskId?: string) => {
     const entry: LogEntry = { timestamp: Date.now(), message, type };
@@ -110,7 +140,6 @@ export default function App() {
           name: crawlerData.name || 'Unknown Hotel',
           address: crawlerData.address || 'No address',
           rating: crawlerData.rating?.score || 0,
-          price: 'N/A', // Booking.com doesn't always show price
           images: crawlerData.images || [],
           // Store additional data
           facilities: crawlerData.facilities,
@@ -118,6 +147,7 @@ export default function App() {
           about: crawlerData.about,
           reviewCount: crawlerData.rating?.reviewCount,
           ratingCategory: crawlerData.rating?.category,
+          houseRules: crawlerData.houseRules,
         };
       } else {
         // Fallback: not in Electron or crawler not available
@@ -208,6 +238,16 @@ export default function App() {
 
   const handleClearQueue = () => {
     if (isRunning) return;
+
+    // Clear from database
+    if (window.isElectron && window.electron?.db) {
+      window.electron.db.deleteAllTasks().then(() => {
+        addLog('All tasks cleared from database', 'info');
+      }).catch(err => {
+        addLog(`Error clearing database: ${err.message}`, 'error');
+      });
+    }
+
     setQueue([]);
     setGlobalLogs([]);
   };

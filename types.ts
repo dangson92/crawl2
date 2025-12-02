@@ -16,7 +16,6 @@ export interface HotelData {
   name: string;
   address: string;
   rating: number;
-  price: string;
   images: string[];
   // Additional fields from real crawler
   facilities?: string[];
@@ -24,6 +23,16 @@ export interface HotelData {
   about?: string;
   reviewCount?: number;
   ratingCategory?: string;
+  houseRules?: {
+    checkIn?: string;
+    checkOut?: string;
+    cancellationPolicy?: string;
+    childPolicies?: string[];
+    ageRestriction?: string;
+    pets?: string;
+    acceptedCards?: string[];
+    cashPolicy?: string;
+  };
 }
 
 export interface Task {

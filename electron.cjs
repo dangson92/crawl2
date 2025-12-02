@@ -1,9 +1,11 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const TaskDatabase = require('./database/taskDatabase.js');
 
 let mainWindow;
 let BookingCrawler = null;
 let activeCrawlers = new Map(); // Store active crawler instances
+let taskDb = null; // Database instance
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -123,6 +125,79 @@ function setupIpcHandlers() {
       return { success: false, error: error.message };
     }
   });
+
+  // Database operations
+  ipcMain.handle('db-save-task', async (event, task) => {
+    try {
+      if (!taskDb) {
+        throw new Error('Database not initialized');
+      }
+      taskDb.saveTask(task);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('db-get-all-tasks', async (event, { limit, offset }) => {
+    try {
+      if (!taskDb) {
+        throw new Error('Database not initialized');
+      }
+      const tasks = taskDb.getAllTasks(limit, offset);
+      return { success: true, data: tasks };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('db-get-task', async (event, taskId) => {
+    try {
+      if (!taskDb) {
+        throw new Error('Database not initialized');
+      }
+      const task = taskDb.getTask(taskId);
+      return { success: true, data: task };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('db-delete-task', async (event, taskId) => {
+    try {
+      if (!taskDb) {
+        throw new Error('Database not initialized');
+      }
+      const deleted = taskDb.deleteTask(taskId);
+      return { success: true, deleted };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('db-delete-all-tasks', async () => {
+    try {
+      if (!taskDb) {
+        throw new Error('Database not initialized');
+      }
+      taskDb.deleteAllTasks();
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('db-get-stats', async () => {
+    try {
+      if (!taskDb) {
+        throw new Error('Database not initialized');
+      }
+      const stats = taskDb.getStats();
+      return { success: true, data: stats };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
 }
 
 app.whenReady().then(async () => {
@@ -133,6 +208,14 @@ app.whenReady().then(async () => {
     console.log('BookingCrawler module loaded successfully');
   } catch (error) {
     console.error('Failed to load BookingCrawler:', error);
+  }
+
+  // Initialize database
+  try {
+    taskDb = new TaskDatabase();
+    console.log('Database initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
   }
 
   // Setup IPC handlers
@@ -148,6 +231,12 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  // Close database connection
+  if (taskDb) {
+    taskDb.close();
+    console.log('Database connection closed');
+  }
+
   if (process.platform !== 'darwin') {
     app.quit();
   }

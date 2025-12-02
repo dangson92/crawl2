@@ -306,23 +306,39 @@ class BookingCrawler {
       const facilities = await this.page.evaluate(() => {
         const result = [];
 
-        // Try different selectors for facilities
-        const facilitySelectors = [
-          '[data-testid="property-most-popular-facilities-wrapper"] .a815ec762e.ab06168e37',
-          '.important_facility',
-          '.hotel-facilities-group',
-        ];
-
-        for (const selector of facilitySelectors) {
-          const elements = document.querySelectorAll(selector);
-          if (elements.length > 0) {
-            elements.forEach(el => {
-              const text = el.textContent.trim();
+        // Priority 1: Extract from facility-group-container (most specific)
+        const containers = document.querySelectorAll('div[data-testid="facility-group-container"]');
+        if (containers.length > 0) {
+          containers.forEach(container => {
+            const items = container.querySelectorAll('span.f6b6d2a959');
+            items.forEach(item => {
+              const text = item.textContent.trim();
               if (text && !result.includes(text)) {
                 result.push(text);
               }
             });
-            break;
+          });
+        }
+
+        // Fallback: Try other selectors if no facilities found
+        if (result.length === 0) {
+          const facilitySelectors = [
+            '[data-testid="property-most-popular-facilities-wrapper"] .a815ec762e.ab06168e37',
+            '.important_facility',
+            '.hotel-facilities-group',
+          ];
+
+          for (const selector of facilitySelectors) {
+            const elements = document.querySelectorAll(selector);
+            if (elements.length > 0) {
+              elements.forEach(el => {
+                const text = el.textContent.trim();
+                if (text && !result.includes(text)) {
+                  result.push(text);
+                }
+              });
+              break;
+            }
           }
         }
 
@@ -343,28 +359,47 @@ class BookingCrawler {
       const faqs = await this.page.evaluate(() => {
         const result = [];
 
-        // Try to find FAQ section
-        const faqSelectors = [
-          '[data-testid="faq-item"]',
-          '.faq-item',
-          '.hp-faq-item',
-        ];
+        // Priority 1: Extract from faqs-list (most specific)
+        const faqsList = document.querySelector('div[data-testid="faqs-list"]');
+        if (faqsList) {
+          const questions = faqsList.querySelectorAll('h3[data-testid="question"]');
+          questions.forEach(questionEl => {
+            const question = questionEl.textContent.trim();
+            // Find answer in the same parent container
+            const answerEl = questionEl.closest('.e5e285812b')?.querySelector('div[data-testid="answer"]');
+            if (answerEl) {
+              result.push({
+                question: question,
+                answer: answerEl.textContent.trim()
+              });
+            }
+          });
+        }
 
-        for (const selector of faqSelectors) {
-          const elements = document.querySelectorAll(selector);
-          if (elements.length > 0) {
-            elements.forEach(el => {
-              const question = el.querySelector('button, .faq-question, h3');
-              const answer = el.querySelector('.faq-answer, [data-testid="faq-answer"], p');
+        // Fallback: Try other selectors if no FAQs found
+        if (result.length === 0) {
+          const faqSelectors = [
+            '[data-testid="faq-item"]',
+            '.faq-item',
+            '.hp-faq-item',
+          ];
 
-              if (question && answer) {
-                result.push({
-                  question: question.textContent.trim(),
-                  answer: answer.textContent.trim()
-                });
-              }
-            });
-            break;
+          for (const selector of faqSelectors) {
+            const elements = document.querySelectorAll(selector);
+            if (elements.length > 0) {
+              elements.forEach(el => {
+                const question = el.querySelector('button, .faq-question, h3');
+                const answer = el.querySelector('.faq-answer, [data-testid="faq-answer"], p');
+
+                if (question && answer) {
+                  result.push({
+                    question: question.textContent.trim(),
+                    answer: answer.textContent.trim()
+                  });
+                }
+              });
+              break;
+            }
           }
         }
 
@@ -382,15 +417,27 @@ class BookingCrawler {
    */
   async getAbout(schemaData = null) {
     try {
-      // Try to get from schema first
+      // Priority 1: Get from specific data-testid attribute (most reliable)
+      const aboutFromTestId = await this.page.evaluate(() => {
+        const element = document.querySelector('p[data-testid="property-description"]');
+        if (element) {
+          return element.innerHTML.trim(); // Use innerHTML to preserve formatting like <b> tags
+        }
+        return null;
+      });
+
+      if (aboutFromTestId) {
+        return aboutFromTestId;
+      }
+
+      // Priority 2: Get from schema
       if (schemaData && schemaData.description) {
         return schemaData.description;
       }
 
-      // Fallback to DOM selectors
+      // Priority 3: Fallback to other DOM selectors
       const about = await this.page.evaluate(() => {
         const selectors = [
-          '[data-testid="property-description"]',
           '#property_description_content',
           '.hp-description',
           '.hotel-description',
@@ -407,6 +454,119 @@ class BookingCrawler {
       return about;
     } catch (error) {
       console.error('Error getting about:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Get house rules (check-in/check-out times, policies, etc.)
+   */
+  async getHouseRules() {
+    try {
+      const houseRules = await this.page.evaluate(() => {
+        const container = document.querySelector('div[data-testid="property-section--content"]');
+        if (!container) return null;
+
+        const rules = {};
+
+        // Extract check-in time
+        const checkInBlock = Array.from(container.querySelectorAll('.e7addce19e')).find(el =>
+          el.textContent.includes('Check-in')
+        );
+        if (checkInBlock) {
+          const timeEl = checkInBlock.closest('.b0400e5749')?.querySelector('.b99b6ef58f');
+          if (timeEl) {
+            rules.checkIn = timeEl.textContent.trim();
+          }
+        }
+
+        // Extract check-out time
+        const checkOutBlock = Array.from(container.querySelectorAll('.e7addce19e')).find(el =>
+          el.textContent.includes('Check-out')
+        );
+        if (checkOutBlock) {
+          const timeEl = checkOutBlock.closest('.b0400e5749')?.querySelector('.b99b6ef58f');
+          if (timeEl) {
+            rules.checkOut = timeEl.textContent.trim();
+          }
+        }
+
+        // Extract cancellation policy
+        const cancellationBlock = Array.from(container.querySelectorAll('.e7addce19e')).find(el =>
+          el.textContent.includes('Cancellation')
+        );
+        if (cancellationBlock) {
+          const policyEl = cancellationBlock.closest('.b0400e5749')?.querySelector('.b99b6ef58f');
+          if (policyEl) {
+            rules.cancellationPolicy = policyEl.textContent.trim();
+          }
+        }
+
+        // Extract child policies
+        const childPoliciesBlock = container.querySelector('[data-test-id="child-policies-block"]');
+        if (childPoliciesBlock) {
+          const childPolicies = [];
+          childPoliciesBlock.querySelectorAll('p').forEach(p => {
+            const text = p.textContent.trim();
+            if (text) childPolicies.push(text);
+          });
+          if (childPolicies.length > 0) {
+            rules.childPolicies = childPolicies;
+          }
+        }
+
+        // Extract age restriction
+        const ageBlock = Array.from(container.querySelectorAll('.e7addce19e')).find(el =>
+          el.textContent.includes('Age restriction')
+        );
+        if (ageBlock) {
+          const ageEl = ageBlock.closest('.b0400e5749')?.querySelector('.b99b6ef58f');
+          if (ageEl) {
+            rules.ageRestriction = ageEl.textContent.trim();
+          }
+        }
+
+        // Extract pets policy
+        const petsBlock = Array.from(container.querySelectorAll('.e7addce19e')).find(el =>
+          el.textContent.includes('Pets')
+        );
+        if (petsBlock) {
+          const petsEl = petsBlock.closest('.b0400e5749')?.querySelector('.b99b6ef58f');
+          if (petsEl) {
+            rules.pets = petsEl.textContent.trim();
+          }
+        }
+
+        // Extract accepted payment cards
+        const cardsBlock = Array.from(container.querySelectorAll('.e7addce19e')).find(el =>
+          el.textContent.includes('Cards accepted')
+        );
+        if (cardsBlock) {
+          const cardsContainer = cardsBlock.closest('.b0400e5749')?.querySelector('.c2a3382bac');
+          if (cardsContainer) {
+            const cards = [];
+            cardsContainer.querySelectorAll('img').forEach(img => {
+              if (img.alt && img.alt !== 'loading') {
+                cards.push(img.alt);
+              }
+            });
+            if (cards.length > 0) {
+              rules.acceptedCards = cards;
+            }
+            // Check for cash policy
+            const cashText = cardsContainer.querySelector('.f323fd7e96');
+            if (cashText) {
+              rules.cashPolicy = cashText.textContent.trim();
+            }
+          }
+        }
+
+        return Object.keys(rules).length > 0 ? rules : null;
+      });
+
+      return houseRules;
+    } catch (error) {
+      console.error('Error getting house rules:', error.message);
       return null;
     }
   }
@@ -528,13 +688,14 @@ class BookingCrawler {
       }
 
       // Get all information (pass schemaData to use as primary source)
-      const [name, address, rating, facilities, faqs, about] = await Promise.all([
+      const [name, address, rating, facilities, faqs, about, houseRules] = await Promise.all([
         this.getHotelName(schemaData),
         this.getAddress(schemaData),
         this.getRating(schemaData),
         this.getFacilities(),
         this.getFAQs(),
         this.getAbout(schemaData),
+        this.getHouseRules(),
       ]);
 
       // Get images separately as it requires navigation
@@ -549,6 +710,7 @@ class BookingCrawler {
         facilities,
         faqs,
         about,
+        houseRules,
         images,
         crawledAt: new Date().toISOString(),
       };

@@ -31,6 +31,28 @@ contextBridge.exposeInMainWorld('electron', {
       return () => ipcRenderer.removeListener('crawler-log', subscription);
     },
   },
+
+  // Database APIs
+  db: {
+    // Save or update a task
+    saveTask: (task) => ipcRenderer.invoke('db-save-task', task),
+
+    // Get all tasks
+    getAllTasks: (limit = 1000, offset = 0) =>
+      ipcRenderer.invoke('db-get-all-tasks', { limit, offset }),
+
+    // Get a single task by ID
+    getTask: (taskId) => ipcRenderer.invoke('db-get-task', taskId),
+
+    // Delete a task
+    deleteTask: (taskId) => ipcRenderer.invoke('db-delete-task', taskId),
+
+    // Delete all tasks
+    deleteAllTasks: () => ipcRenderer.invoke('db-delete-all-tasks'),
+
+    // Get statistics
+    getStats: () => ipcRenderer.invoke('db-get-stats'),
+  },
 });
 
 // Indicate that app is running in Electron
