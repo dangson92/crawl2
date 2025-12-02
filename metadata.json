@@ -1,0 +1,5 @@
+{
+  "name": "Hotel Crawl Manager",
+  "description": "A dashboard for managing high-concurrency scraping tasks, specifically designed for extracting hotel gallery images. Includes queue management, real-time logging, and Excel export.",
+  "requestFramePermissions": []
+}
