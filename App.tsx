@@ -118,6 +118,7 @@ export default function App() {
           about: crawlerData.about,
           reviewCount: crawlerData.rating?.reviewCount,
           ratingCategory: crawlerData.rating?.category,
+          houseRules: crawlerData.houseRules,
         };
       } else {
         // Fallback: not in Electron or crawler not available
