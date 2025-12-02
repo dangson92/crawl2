@@ -18,6 +18,12 @@ export interface HotelData {
   rating: number;
   price: string;
   images: string[];
+  // Additional fields from real crawler
+  facilities?: string[];
+  faqs?: Array<{ question: string; answer: string }>;
+  about?: string;
+  reviewCount?: number;
+  ratingCategory?: string;
 }
 
 export interface Task {
