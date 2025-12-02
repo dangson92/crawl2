@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "concurrently \"cross-env NODE_ENV=development vite\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .\"",
+    "start": "concurrently --kill-others \"cross-env NODE_ENV=development vite\" \"wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .\"",
     "electron": "electron .",
     "electron:build": "vite build && electron-builder",
     "electron:build:win": "vite build && electron-builder --win",

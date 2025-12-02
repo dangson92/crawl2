@@ -231,14 +231,59 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  // Close database connection
-  if (taskDb) {
-    taskDb.close();
-    console.log('Database connection closed');
-  }
+  // Always quit on all platforms (including macOS)
+  app.quit();
+});
 
-  if (process.platform !== 'darwin') {
-    app.quit();
+// Cleanup before quit
+let isQuitting = false;
+app.on('before-quit', async (event) => {
+  if (isQuitting) return;
+
+  event.preventDefault();
+  isQuitting = true;
+
+  console.log('App is quitting, cleaning up resources...');
+
+  // Set timeout to force quit after 3 seconds
+  const forceQuitTimeout = setTimeout(() => {
+    console.log('Force quitting after timeout...');
+    process.exit(0);
+  }, 3000);
+
+  try {
+    // Close all active crawlers
+    if (activeCrawlers.size > 0) {
+      console.log(`Closing ${activeCrawlers.size} active crawlers...`);
+      const closePromises = [];
+      for (const [taskId, crawler] of activeCrawlers.entries()) {
+        closePromises.push(
+          crawler.close()
+            .then(() => console.log(`Closed crawler for task ${taskId}`))
+            .catch(error => console.error(`Error closing crawler ${taskId}:`, error.message))
+        );
+      }
+      await Promise.allSettled(closePromises);
+      activeCrawlers.clear();
+    }
+
+    // Close database connection
+    if (taskDb) {
+      try {
+        taskDb.close();
+        console.log('Database connection closed');
+        taskDb = null;
+      } catch (error) {
+        console.error('Error closing database:', error.message);
+      }
+    }
+
+    console.log('Cleanup completed');
+  } catch (error) {
+    console.error('Error during cleanup:', error);
+  } finally {
+    clearTimeout(forceQuitTimeout);
+    app.exit(0);
   }
 });
 

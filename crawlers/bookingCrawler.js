@@ -307,10 +307,14 @@ class BookingCrawler {
         const result = [];
 
         // Priority 1: Extract from facility-group-container (most specific)
+        console.log('Searching for facilities with data-testid="facility-group-container"...');
         const containers = document.querySelectorAll('div[data-testid="facility-group-container"]');
+        console.log(`Found ${containers.length} facility containers`);
+
         if (containers.length > 0) {
           containers.forEach(container => {
             const items = container.querySelectorAll('span.f6b6d2a959');
+            console.log(`Container has ${items.length} facility items`);
             items.forEach(item => {
               const text = item.textContent.trim();
               if (text && !result.includes(text)) {
@@ -322,6 +326,7 @@ class BookingCrawler {
 
         // Fallback: Try other selectors if no facilities found
         if (result.length === 0) {
+          console.log('No facilities found with primary selector, trying fallbacks...');
           const facilitySelectors = [
             '[data-testid="property-most-popular-facilities-wrapper"] .a815ec762e.ab06168e37',
             '.important_facility',
@@ -330,6 +335,7 @@ class BookingCrawler {
 
           for (const selector of facilitySelectors) {
             const elements = document.querySelectorAll(selector);
+            console.log(`Selector "${selector}" found ${elements.length} elements`);
             if (elements.length > 0) {
               elements.forEach(el => {
                 const text = el.textContent.trim();
@@ -342,6 +348,7 @@ class BookingCrawler {
           }
         }
 
+        console.log(`Total facilities extracted: ${result.length}`);
         return result;
       });
       return facilities;
@@ -360,24 +367,44 @@ class BookingCrawler {
         const result = [];
 
         // Priority 1: Extract from faqs-list (most specific)
+        console.log('Searching for FAQs with data-testid="faqs-list"...');
         const faqsList = document.querySelector('div[data-testid="faqs-list"]');
+
         if (faqsList) {
+          console.log('Found FAQs list container');
           const questions = faqsList.querySelectorAll('h3[data-testid="question"]');
-          questions.forEach(questionEl => {
+          console.log(`Found ${questions.length} FAQ questions`);
+
+          questions.forEach((questionEl, idx) => {
             const question = questionEl.textContent.trim();
-            // Find answer in the same parent container
-            const answerEl = questionEl.closest('.e5e285812b')?.querySelector('div[data-testid="answer"]');
+            // Try multiple parent selectors
+            let answerEl = questionEl.closest('.e5e285812b')?.querySelector('div[data-testid="answer"]');
+
+            // If not found, try other parent containers
+            if (!answerEl) {
+              answerEl = questionEl.parentElement?.querySelector('div[data-testid="answer"]');
+            }
+            if (!answerEl) {
+              answerEl = questionEl.parentElement?.parentElement?.querySelector('div[data-testid="answer"]');
+            }
+
             if (answerEl) {
               result.push({
                 question: question,
                 answer: answerEl.textContent.trim()
               });
+              console.log(`FAQ ${idx + 1}: ${question.substring(0, 50)}...`);
+            } else {
+              console.log(`FAQ ${idx + 1}: Found question but no answer - ${question.substring(0, 50)}...`);
             }
           });
+        } else {
+          console.log('FAQs list container not found');
         }
 
         // Fallback: Try other selectors if no FAQs found
         if (result.length === 0) {
+          console.log('No FAQs found with primary selector, trying fallbacks...');
           const faqSelectors = [
             '[data-testid="faq-item"]',
             '.faq-item',
@@ -386,6 +413,7 @@ class BookingCrawler {
 
           for (const selector of faqSelectors) {
             const elements = document.querySelectorAll(selector);
+            console.log(`Selector "${selector}" found ${elements.length} elements`);
             if (elements.length > 0) {
               elements.forEach(el => {
                 const question = el.querySelector('button, .faq-question, h3');
@@ -403,6 +431,7 @@ class BookingCrawler {
           }
         }
 
+        console.log(`Total FAQs extracted: ${result.length}`);
         return result;
       });
       return faqs;
@@ -464,9 +493,15 @@ class BookingCrawler {
   async getHouseRules() {
     try {
       const houseRules = await this.page.evaluate(() => {
+        console.log('Searching for house rules with data-testid="property-section--content"...');
         const container = document.querySelector('div[data-testid="property-section--content"]');
-        if (!container) return null;
 
+        if (!container) {
+          console.log('House rules container not found');
+          return null;
+        }
+
+        console.log('Found house rules container');
         const rules = {};
 
         // Extract check-in time
@@ -560,6 +595,14 @@ class BookingCrawler {
             }
           }
         }
+
+        console.log('Extracted house rules:', {
+          hasCheckIn: !!rules.checkIn,
+          hasCheckOut: !!rules.checkOut,
+          hasCancellation: !!rules.cancellationPolicy,
+          hasPets: !!rules.pets,
+          cardsCount: rules.acceptedCards?.length || 0
+        });
 
         return Object.keys(rules).length > 0 ? rules : null;
       });
@@ -676,6 +719,10 @@ class BookingCrawler {
       // Wait for main content to load
       await this.sleep(2000);
 
+      // Scroll down slowly to trigger lazy loading of all sections
+      console.log('Scrolling page to load all content...');
+      await this.autoScroll();
+
       console.log('Extracting hotel information...');
 
       // First, try to get structured data from JSON-LD schema
@@ -688,15 +735,26 @@ class BookingCrawler {
       }
 
       // Get all information (pass schemaData to use as primary source)
-      const [name, address, rating, facilities, faqs, about, houseRules] = await Promise.all([
+      console.log('Extracting name, address, rating...');
+      const [name, address, rating] = await Promise.all([
         this.getHotelName(schemaData),
         this.getAddress(schemaData),
         this.getRating(schemaData),
-        this.getFacilities(),
-        this.getFAQs(),
-        this.getAbout(schemaData),
-        this.getHouseRules(),
       ]);
+
+      console.log('Extracting about section...');
+      const about = await this.getAbout(schemaData);
+
+      console.log('Extracting facilities...');
+      const facilities = await this.getFacilities();
+      console.log(`Found ${facilities?.length || 0} facilities`);
+
+      console.log('Extracting house rules...');
+      const houseRules = await this.getHouseRules();
+
+      console.log('Extracting FAQs...');
+      const faqs = await this.getFAQs();
+      console.log(`Found ${faqs?.length || 0} FAQs`);
 
       // Get images separately as it requires navigation
       console.log('Extracting images...');
@@ -716,11 +774,44 @@ class BookingCrawler {
       };
 
       console.log('Crawl completed successfully!');
+      console.log('Summary:', {
+        name,
+        facilitiesCount: facilities?.length || 0,
+        faqsCount: faqs?.length || 0,
+        hasHouseRules: !!houseRules,
+        imagesCount: images?.length || 0
+      });
       return result;
     } catch (error) {
       console.error('Error crawling hotel:', error.message);
       throw error;
     }
+  }
+
+  /**
+   * Auto scroll page to load lazy content
+   */
+  async autoScroll() {
+    await this.page.evaluate(async () => {
+      await new Promise((resolve) => {
+        let totalHeight = 0;
+        const distance = 100;
+        const timer = setInterval(() => {
+          const scrollHeight = document.body.scrollHeight;
+          window.scrollBy(0, distance);
+          totalHeight += distance;
+
+          if (totalHeight >= scrollHeight) {
+            clearInterval(timer);
+            resolve();
+          }
+        }, 100);
+      });
+    });
+
+    // Scroll back to top
+    await this.page.evaluate(() => window.scrollTo(0, 0));
+    await this.sleep(1000);
   }
 
   /**
