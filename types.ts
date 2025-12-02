@@ -16,7 +16,6 @@ export interface HotelData {
   name: string;
   address: string;
   rating: number;
-  price: string;
   images: string[];
   // Additional fields from real crawler
   facilities?: string[];

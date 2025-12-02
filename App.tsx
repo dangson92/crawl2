@@ -110,7 +110,6 @@ export default function App() {
           name: crawlerData.name || 'Unknown Hotel',
           address: crawlerData.address || 'No address',
           rating: crawlerData.rating?.score || 0,
-          price: 'N/A', // Booking.com doesn't always show price
           images: crawlerData.images || [],
           // Store additional data
           facilities: crawlerData.facilities,

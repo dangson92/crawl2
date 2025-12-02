@@ -306,23 +306,39 @@ class BookingCrawler {
       const facilities = await this.page.evaluate(() => {
         const result = [];
 
-        // Try different selectors for facilities
-        const facilitySelectors = [
-          '[data-testid="property-most-popular-facilities-wrapper"] .a815ec762e.ab06168e37',
-          '.important_facility',
-          '.hotel-facilities-group',
-        ];
-
-        for (const selector of facilitySelectors) {
-          const elements = document.querySelectorAll(selector);
-          if (elements.length > 0) {
-            elements.forEach(el => {
-              const text = el.textContent.trim();
+        // Priority 1: Extract from facility-group-container (most specific)
+        const containers = document.querySelectorAll('div[data-testid="facility-group-container"]');
+        if (containers.length > 0) {
+          containers.forEach(container => {
+            const items = container.querySelectorAll('span.f6b6d2a959');
+            items.forEach(item => {
+              const text = item.textContent.trim();
               if (text && !result.includes(text)) {
                 result.push(text);
               }
             });
-            break;
+          });
+        }
+
+        // Fallback: Try other selectors if no facilities found
+        if (result.length === 0) {
+          const facilitySelectors = [
+            '[data-testid="property-most-popular-facilities-wrapper"] .a815ec762e.ab06168e37',
+            '.important_facility',
+            '.hotel-facilities-group',
+          ];
+
+          for (const selector of facilitySelectors) {
+            const elements = document.querySelectorAll(selector);
+            if (elements.length > 0) {
+              elements.forEach(el => {
+                const text = el.textContent.trim();
+                if (text && !result.includes(text)) {
+                  result.push(text);
+                }
+              });
+              break;
+            }
           }
         }
 
@@ -343,28 +359,47 @@ class BookingCrawler {
       const faqs = await this.page.evaluate(() => {
         const result = [];
 
-        // Try to find FAQ section
-        const faqSelectors = [
-          '[data-testid="faq-item"]',
-          '.faq-item',
-          '.hp-faq-item',
-        ];
+        // Priority 1: Extract from faqs-list (most specific)
+        const faqsList = document.querySelector('div[data-testid="faqs-list"]');
+        if (faqsList) {
+          const questions = faqsList.querySelectorAll('h3[data-testid="question"]');
+          questions.forEach(questionEl => {
+            const question = questionEl.textContent.trim();
+            // Find answer in the same parent container
+            const answerEl = questionEl.closest('.e5e285812b')?.querySelector('div[data-testid="answer"]');
+            if (answerEl) {
+              result.push({
+                question: question,
+                answer: answerEl.textContent.trim()
+              });
+            }
+          });
+        }
 
-        for (const selector of faqSelectors) {
-          const elements = document.querySelectorAll(selector);
-          if (elements.length > 0) {
-            elements.forEach(el => {
-              const question = el.querySelector('button, .faq-question, h3');
-              const answer = el.querySelector('.faq-answer, [data-testid="faq-answer"], p');
+        // Fallback: Try other selectors if no FAQs found
+        if (result.length === 0) {
+          const faqSelectors = [
+            '[data-testid="faq-item"]',
+            '.faq-item',
+            '.hp-faq-item',
+          ];
 
-              if (question && answer) {
-                result.push({
-                  question: question.textContent.trim(),
-                  answer: answer.textContent.trim()
-                });
-              }
-            });
-            break;
+          for (const selector of faqSelectors) {
+            const elements = document.querySelectorAll(selector);
+            if (elements.length > 0) {
+              elements.forEach(el => {
+                const question = el.querySelector('button, .faq-question, h3');
+                const answer = el.querySelector('.faq-answer, [data-testid="faq-answer"], p');
+
+                if (question && answer) {
+                  result.push({
+                    question: question.textContent.trim(),
+                    answer: answer.textContent.trim()
+                  });
+                }
+              });
+              break;
+            }
           }
         }
 
