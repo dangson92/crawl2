@@ -14,6 +14,7 @@
     "electron:build:win": "vite build && electron-builder --win",
     "electron:build:mac": "vite build && electron-builder --mac",
     "electron:build:linux": "vite build && electron-builder --linux",
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
     "crawler": "node crawlers/example.js",
     "find-chrome": "node crawlers/findChrome.js"
   },
@@ -32,6 +33,7 @@
     "cross-env": "^10.1.0",
     "electron": "^39.2.4",
     "electron-builder": "^26.0.12",
+    "electron-rebuild": "^3.2.9",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "wait-on": "^9.0.3"
@@ -46,6 +48,8 @@
       "dist/**/*",
       "electron.cjs",
       "preload.cjs",
+      "database/**/*",
+      "crawlers/**/*",
       "package.json"
     ],
     "win": {
