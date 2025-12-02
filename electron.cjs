@@ -205,7 +205,6 @@ app.whenReady().then(async () => {
   try {
     const module = await import('./crawlers/bookingCrawler.js');
     BookingCrawler = module.default;
-    console.log('BookingCrawler module loaded successfully');
   } catch (error) {
     console.error('Failed to load BookingCrawler:', error);
   }
@@ -213,7 +212,6 @@ app.whenReady().then(async () => {
   // Initialize database
   try {
     taskDb = new TaskDatabase();
-    console.log('Database initialized successfully');
   } catch (error) {
     console.error('Failed to initialize database:', error);
   }
@@ -243,18 +241,15 @@ app.on('before-quit', async (event) => {
   event.preventDefault();
   isQuitting = true;
 
-  console.log('App is quitting, cleaning up resources...');
 
   // Set timeout to force quit after 3 seconds
   const forceQuitTimeout = setTimeout(() => {
-    console.log('Force quitting after timeout...');
     process.exit(0);
   }, 3000);
 
   try {
     // Close all active crawlers
     if (activeCrawlers.size > 0) {
-      console.log(`Closing ${activeCrawlers.size} active crawlers...`);
       const closePromises = [];
       for (const [taskId, crawler] of activeCrawlers.entries()) {
         closePromises.push(
@@ -271,14 +266,12 @@ app.on('before-quit', async (event) => {
     if (taskDb) {
       try {
         taskDb.close();
-        console.log('Database connection closed');
         taskDb = null;
       } catch (error) {
         console.error('Error closing database:', error.message);
       }
     }
 
-    console.log('Cleanup completed');
   } catch (error) {
     console.error('Error during cleanup:', error);
   } finally {
