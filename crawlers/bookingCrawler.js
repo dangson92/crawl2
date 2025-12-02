@@ -57,6 +57,13 @@ class BookingCrawler {
   }
 
   /**
+   * Sleep/wait helper function
+   */
+  async sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
    * Wait for element with timeout
    */
   async waitForElement(selector, timeout = this.options.timeout) {
@@ -330,7 +337,7 @@ class BookingCrawler {
       });
 
       // Wait for gallery popup to appear
-      await this.page.waitForTimeout(3000); // Wait 3 seconds for popup
+      await this.sleep(3000); // Wait 3 seconds for popup
 
       const images = await this.page.evaluate(() => {
         const result = [];
@@ -400,7 +407,7 @@ class BookingCrawler {
       });
 
       // Wait for main content to load
-      await this.page.waitForTimeout(2000);
+      await this.sleep(2000);
 
       console.log('Extracting hotel information...');
 
