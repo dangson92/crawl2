@@ -1,6 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const TaskDatabase = require('./database/taskDatabase.js');
+const TaskDatabase = require('./database/taskDatabase.cjs');
 
 let mainWindow;
 let BookingCrawler = null;
