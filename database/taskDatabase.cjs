@@ -15,7 +15,6 @@ class TaskDatabase {
     }
 
     const dbPath = path.join(dbDir, 'tasks.db');
-    console.log('Database path:', dbPath);
 
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
