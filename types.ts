@@ -28,6 +28,10 @@ export interface HotelData {
     checkOut?: string;
     pets?: string;
   };
+  // Location fields
+  countryName?: string;
+  regionName?: string;
+  cityName?: string;
 }
 
 export interface Task {

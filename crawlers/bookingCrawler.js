@@ -182,6 +182,84 @@ class BookingCrawler {
   }
 
   /**
+   * Get location details (city, region, country)
+   */
+  async getLocationDetails(schemaData = null) {
+    try {
+      const location = {
+        cityName: null,
+        regionName: null,
+        countryName: null
+      };
+
+      // Try to get from schema first
+      if (schemaData && schemaData.address) {
+        const addr = schemaData.address;
+        if (addr.addressLocality) {
+          location.cityName = addr.addressLocality;
+        }
+        if (addr.addressRegion) {
+          location.regionName = addr.addressRegion;
+        }
+        if (addr.addressCountry) {
+          if (typeof addr.addressCountry === 'string') {
+            location.countryName = addr.addressCountry;
+          } else if (addr.addressCountry.name) {
+            location.countryName = addr.addressCountry.name;
+          }
+        }
+      }
+
+      // If schema didn't provide full data, try breadcrumbs
+      if (!location.cityName || !location.countryName) {
+        const breadcrumbData = await this.page.evaluate(() => {
+          const breadcrumbLocation = {
+            cityName: null,
+            regionName: null,
+            countryName: null
+          };
+
+          // Try to get from breadcrumbs
+          const breadcrumbs = document.querySelectorAll('[data-testid="breadcrumb"] a, .bui-breadcrumb__link');
+          if (breadcrumbs && breadcrumbs.length >= 2) {
+            // Usually: Home > Country > Region/City > Hotel
+            // The last one before hotel is usually city, and one before that could be country
+            const links = Array.from(breadcrumbs).map(b => b.textContent.trim()).filter(t => t);
+            if (links.length >= 2) {
+              breadcrumbLocation.countryName = links[0]; // First is usually country
+              breadcrumbLocation.cityName = links[links.length - 1]; // Last is usually city
+              if (links.length >= 3) {
+                breadcrumbLocation.regionName = links[1]; // Middle could be region
+              }
+            }
+          }
+
+          return breadcrumbLocation;
+        });
+
+        // Use breadcrumb data as fallback
+        if (!location.cityName && breadcrumbData.cityName) {
+          location.cityName = breadcrumbData.cityName;
+        }
+        if (!location.regionName && breadcrumbData.regionName) {
+          location.regionName = breadcrumbData.regionName;
+        }
+        if (!location.countryName && breadcrumbData.countryName) {
+          location.countryName = breadcrumbData.countryName;
+        }
+      }
+
+      return location;
+    } catch (error) {
+      return {
+        cityName: null,
+        regionName: null,
+        countryName: null
+      };
+    }
+  }
+
+  /**
    * Get hotel rating
    */
   async getRating(schemaData = null) {
@@ -664,10 +742,11 @@ class BookingCrawler {
       }
 
       // Get all information (pass schemaData to use as primary source)
-      const [name, address, rating] = await Promise.all([
+      const [name, address, rating, locationDetails] = await Promise.all([
         this.getHotelName(schemaData),
         this.getAddress(schemaData),
         this.getRating(schemaData),
+        this.getLocationDetails(schemaData),
       ]);
 
       const about = await this.getAbout(schemaData);
@@ -691,6 +770,9 @@ class BookingCrawler {
         about,
         houseRules,
         images,
+        cityName: locationDetails.cityName,
+        regionName: locationDetails.regionName,
+        countryName: locationDetails.countryName,
         crawledAt: new Date().toISOString(),
       };
 

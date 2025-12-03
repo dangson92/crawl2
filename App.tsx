@@ -149,6 +149,10 @@ export default function App() {
           reviewCount: crawlerData.rating?.reviewCount,
           ratingCategory: crawlerData.rating?.category,
           houseRules: crawlerData.houseRules,
+          // Location data
+          cityName: crawlerData.cityName,
+          regionName: crawlerData.regionName,
+          countryName: crawlerData.countryName,
         };
       } else {
         // Fallback: not in Electron or crawler not available
