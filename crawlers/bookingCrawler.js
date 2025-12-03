@@ -222,14 +222,30 @@ class BookingCrawler {
           // Try to get from breadcrumbs
           const breadcrumbs = document.querySelectorAll('[data-testid="breadcrumb"] a, .bui-breadcrumb__link');
           if (breadcrumbs && breadcrumbs.length >= 2) {
-            // Usually: Home > Country > Region/City > Hotel
-            // The last one before hotel is usually city, and one before that could be country
+            // Breadcrumb structure: Home/Country > Region/City > [More specific area] > Hotel Name (current page)
+            // We need to exclude the last item as it's the hotel/current page
             const links = Array.from(breadcrumbs).map(b => b.textContent.trim()).filter(t => t);
-            if (links.length >= 2) {
-              breadcrumbLocation.countryName = links[0]; // First is usually country
-              breadcrumbLocation.cityName = links[links.length - 1]; // Last is usually city
-              if (links.length >= 3) {
-                breadcrumbLocation.regionName = links[1]; // Middle could be region
+
+            // Remove the last item (hotel name / current page)
+            const locationLinks = links.slice(0, -1);
+
+            if (locationLinks.length >= 1) {
+              // First is usually country (or sometimes "Home", so we take first non-"Home" item)
+              breadcrumbLocation.countryName = locationLinks[0] === 'Home' && locationLinks.length > 1
+                ? locationLinks[1]
+                : locationLinks[0];
+
+              // Last location link is city (after removing hotel name)
+              if (locationLinks.length >= 2) {
+                breadcrumbLocation.cityName = locationLinks[locationLinks.length - 1];
+              }
+
+              // Middle one could be region
+              if (locationLinks.length >= 3) {
+                const countryIndex = locationLinks[0] === 'Home' ? 1 : 0;
+                if (locationLinks.length > countryIndex + 2) {
+                  breadcrumbLocation.regionName = locationLinks[countryIndex + 1];
+                }
               }
             }
           }
