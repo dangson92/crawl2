@@ -513,57 +513,22 @@ class BookingCrawler {
         // Extract all text content and parse it
         const containerText = container.textContent;
 
-        // Extract check-in time - look for patterns
+        // Extract check-in time
         const checkInMatch = containerText.match(/Check-in[:\s]+([^\n]+?)(?:Check-out|$)/i);
         if (checkInMatch) {
           rules.checkIn = checkInMatch[1].trim().split('\n')[0].trim();
         }
 
         // Extract check-out time
-        const checkOutMatch = containerText.match(/Check-out[:\s]+([^\n]+?)(?:Cancellation|Prepayment|$)/i);
+        const checkOutMatch = containerText.match(/Check-out[:\s]+([^\n]+?)(?:Cancellation|Prepayment|Pets|Children|$)/i);
         if (checkOutMatch) {
           rules.checkOut = checkOutMatch[1].trim().split('\n')[0].trim();
         }
 
-        // Extract cancellation/prepayment
-        const cancellationMatch = containerText.match(/(?:Cancellation|Prepayment)[:\s]+([^\n]+?)(?:Pets|Children|Age|$)/i);
-        if (cancellationMatch) {
-          rules.cancellationPolicy = cancellationMatch[1].trim();
-        }
-
         // Extract pets policy
-        const petsMatch = containerText.match(/Pets[:\s]+([^\n]+?)(?:Children|Age|Cards|$)/i);
+        const petsMatch = containerText.match(/Pets[:\s]+([^\n]+?)(?:Children|Age|Cards|Cancellation|$)/i);
         if (petsMatch) {
           rules.pets = petsMatch[1].trim();
-        }
-
-        // Extract age restriction
-        const ageMatch = containerText.match(/(?:Age restriction|Minimum age)[:\s]+([^\n]+?)(?:Pets|Children|Cards|$)/i);
-        if (ageMatch) {
-          rules.ageRestriction = ageMatch[1].trim();
-        }
-
-        // Try more specific selectors for structured data
-        // Look for payment cards
-        const cardImgs = container.querySelectorAll('img[alt*="card" i], img[alt*="visa" i], img[alt*="mastercard" i]');
-        if (cardImgs.length > 0) {
-          const cards = [];
-          cardImgs.forEach(img => {
-            if (img.alt && img.alt !== 'loading' && !img.alt.includes('icon')) {
-              cards.push(img.alt);
-            }
-          });
-          if (cards.length > 0) {
-            rules.acceptedCards = [...new Set(cards)]; // Remove duplicates
-          }
-        }
-
-        // Look for cash policy
-        if (containerText.includes('cash') || containerText.includes('Cash')) {
-          const cashMatch = containerText.match(/(Cash (?:is not |is )?accepted[^.]*)/i);
-          if (cashMatch) {
-            rules.cashPolicy = cashMatch[1].trim();
-          }
         }
 
         return Object.keys(rules).length > 0 ? rules : null;

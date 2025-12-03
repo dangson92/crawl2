@@ -26,12 +26,7 @@ export interface HotelData {
   houseRules?: {
     checkIn?: string;
     checkOut?: string;
-    cancellationPolicy?: string;
-    childPolicies?: string[];
-    ageRestriction?: string;
     pets?: string;
-    acceptedCards?: string[];
-    cashPolicy?: string;
   };
 }
 

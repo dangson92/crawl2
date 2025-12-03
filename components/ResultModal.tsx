@@ -149,7 +149,7 @@ const ResultModal: React.FC<ResultModalProps> = ({ task, onClose }) => {
                     <ShieldCheck size={16} className="text-green-600" />
                     <h3 className="text-sm font-bold text-gray-900">House Rules</h3>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {task.result.houseRules.checkIn && (
                       <div>
                         <div className="text-xs font-bold text-gray-500 uppercase mb-1">Check-in</div>
@@ -162,22 +162,10 @@ const ResultModal: React.FC<ResultModalProps> = ({ task, onClose }) => {
                         <div className="text-sm text-gray-700">{task.result.houseRules.checkOut}</div>
                       </div>
                     )}
-                    {task.result.houseRules.cancellationPolicy && (
-                      <div className="md:col-span-2">
-                        <div className="text-xs font-bold text-gray-500 uppercase mb-1">Cancellation Policy</div>
-                        <div className="text-sm text-gray-700">{task.result.houseRules.cancellationPolicy}</div>
-                      </div>
-                    )}
                     {task.result.houseRules.pets && (
                       <div>
                         <div className="text-xs font-bold text-gray-500 uppercase mb-1">Pets</div>
                         <div className="text-sm text-gray-700">{task.result.houseRules.pets}</div>
-                      </div>
-                    )}
-                    {task.result.houseRules.acceptedCards && task.result.houseRules.acceptedCards.length > 0 && (
-                      <div>
-                        <div className="text-xs font-bold text-gray-500 uppercase mb-1">Accepted Cards</div>
-                        <div className="text-sm text-gray-700">{task.result.houseRules.acceptedCards.join(', ')}</div>
                       </div>
                     )}
                   </div>
