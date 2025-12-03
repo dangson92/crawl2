@@ -200,54 +200,74 @@ class BookingCrawler {
           countryName: null
         };
 
-        // Method 1: Look for JSON data in script tags
+        // Method 1: Check window object for booking data first (most reliable)
+        if (window.b_hotel_data) {
+          const hotelData = window.b_hotel_data;
+          if (hotelData.city_name) {
+            jsonData.cityName = hotelData.city_name;
+          }
+          if (hotelData.region_name) {
+            jsonData.regionName = hotelData.region_name;
+          }
+          if (hotelData.country_name) {
+            jsonData.countryName = hotelData.country_name;
+          }
+
+          // If we got all data from window object, return immediately
+          if (jsonData.cityName && jsonData.countryName) {
+            return jsonData;
+          }
+        }
+
+        // Method 2: Look for complete location object in script tags
         const scripts = document.querySelectorAll('script:not([src])');
         for (const script of scripts) {
           try {
             const content = script.textContent;
 
-            // Look for data that contains location fields (snake_case format)
-            if (content.includes('city_name') || content.includes('country_name')) {
-              // Try to find JSON objects with these fields
-              const jsonMatches = content.matchAll(/\{[^{}]*(?:"city_name"|"country_name"|"region_name")[^{}]*\}/g);
-              for (const match of jsonMatches) {
-                try {
-                  const obj = JSON.parse(match[0]);
-                  if (obj.city_name && !jsonData.cityName) {
-                    jsonData.cityName = obj.city_name;
-                  }
-                  if (obj.region_name && !jsonData.regionName) {
-                    jsonData.regionName = obj.region_name;
-                  }
-                  if (obj.country_name && !jsonData.countryName) {
-                    jsonData.countryName = obj.country_name;
-                  }
+            // Only search in scripts that contain location fields
+            if (content.includes('city_name') && content.includes('country_name')) {
+              // Try to find a complete object with all location fields together
+              // Use a more flexible regex that can match nested objects
+              const lines = content.split('\n');
 
-                  // If we found all three, we can stop
-                  if (jsonData.cityName && jsonData.countryName && jsonData.regionName) {
-                    return jsonData;
+              for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+
+                // Look for lines that might start a location object
+                if (line.includes('city_name') || line.includes('country_name')) {
+                  // Try to find the containing object by looking around this line
+                  let startIdx = i - 5 > 0 ? i - 5 : 0;
+                  let endIdx = i + 5 < lines.length ? i + 5 : lines.length;
+
+                  const contextLines = lines.slice(startIdx, endIdx).join('\n');
+
+                  // Look for objects that have multiple location fields
+                  if (contextLines.includes('city_name') &&
+                      contextLines.includes('country_name')) {
+
+                    // Try to extract values using regex
+                    const cityMatch = contextLines.match(/"city_name"\s*:\s*"([^"]+)"/);
+                    const countryMatch = contextLines.match(/"country_name"\s*:\s*"([^"]+)"/);
+                    const regionMatch = contextLines.match(/"region_name"\s*:\s*"([^"]+)"/);
+
+                    // Only accept if we found at least city and country in the same context
+                    if (cityMatch && countryMatch && !jsonData.cityName) {
+                      jsonData.cityName = cityMatch[1];
+                      jsonData.countryName = countryMatch[1];
+                      if (regionMatch) {
+                        jsonData.regionName = regionMatch[1];
+                      }
+
+                      // Found valid location data, return it
+                      return jsonData;
+                    }
                   }
-                } catch (e) {
-                  // Not valid JSON, continue
                 }
               }
             }
           } catch (e) {
             // Continue to next script
-          }
-        }
-
-        // Method 2: Check window object for booking data
-        if (window.b_hotel_data) {
-          const hotelData = window.b_hotel_data;
-          if (hotelData.city_name && !jsonData.cityName) {
-            jsonData.cityName = hotelData.city_name;
-          }
-          if (hotelData.region_name && !jsonData.regionName) {
-            jsonData.regionName = hotelData.region_name;
-          }
-          if (hotelData.country_name && !jsonData.countryName) {
-            jsonData.countryName = hotelData.country_name;
           }
         }
 
