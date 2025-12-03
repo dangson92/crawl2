@@ -192,76 +192,96 @@ class BookingCrawler {
         countryName: null
       };
 
-      // Try to get from schema first
-      if (schemaData && schemaData.address) {
-        const addr = schemaData.address;
-        if (addr.addressLocality) {
-          location.cityName = addr.addressLocality;
-        }
-        if (addr.addressRegion) {
-          location.regionName = addr.addressRegion;
-        }
-        if (addr.addressCountry) {
-          if (typeof addr.addressCountry === 'string') {
-            location.countryName = addr.addressCountry;
-          } else if (addr.addressCountry.name) {
-            location.countryName = addr.addressCountry.name;
-          }
-        }
-      }
+      // Try to get from embedded JSON data first (most reliable)
+      const jsonLocation = await this.page.evaluate(() => {
+        const jsonData = {
+          cityName: null,
+          regionName: null,
+          countryName: null
+        };
 
-      // If schema didn't provide full data, try breadcrumbs
-      if (!location.cityName || !location.countryName) {
-        const breadcrumbData = await this.page.evaluate(() => {
-          const breadcrumbLocation = {
-            cityName: null,
-            regionName: null,
-            countryName: null
-          };
+        // Method 1: Look for JSON data in script tags
+        const scripts = document.querySelectorAll('script:not([src])');
+        for (const script of scripts) {
+          try {
+            const content = script.textContent;
 
-          // Try to get from breadcrumbs
-          const breadcrumbs = document.querySelectorAll('[data-testid="breadcrumb"] a, .bui-breadcrumb__link');
-          if (breadcrumbs && breadcrumbs.length >= 2) {
-            // Breadcrumb structure: Home/Country > Region/City > [More specific area] > Hotel Name (current page)
-            // We need to exclude the last item as it's the hotel/current page
-            const links = Array.from(breadcrumbs).map(b => b.textContent.trim()).filter(t => t);
+            // Look for data that contains location fields
+            if (content.includes('cityName') || content.includes('countryName')) {
+              // Try to find JSON objects with these fields
+              const jsonMatches = content.matchAll(/\{[^{}]*(?:"cityName"|"countryName"|"regionName")[^{}]*\}/g);
+              for (const match of jsonMatches) {
+                try {
+                  const obj = JSON.parse(match[0]);
+                  if (obj.cityName && !jsonData.cityName) {
+                    jsonData.cityName = obj.cityName;
+                  }
+                  if (obj.regionName && !jsonData.regionName) {
+                    jsonData.regionName = obj.regionName;
+                  }
+                  if (obj.countryName && !jsonData.countryName) {
+                    jsonData.countryName = obj.countryName;
+                  }
 
-            // Remove the last item (hotel name / current page)
-            const locationLinks = links.slice(0, -1);
-
-            if (locationLinks.length >= 1) {
-              // First is usually country (or sometimes "Home", so we take first non-"Home" item)
-              breadcrumbLocation.countryName = locationLinks[0] === 'Home' && locationLinks.length > 1
-                ? locationLinks[1]
-                : locationLinks[0];
-
-              // Last location link is city (after removing hotel name)
-              if (locationLinks.length >= 2) {
-                breadcrumbLocation.cityName = locationLinks[locationLinks.length - 1];
-              }
-
-              // Middle one could be region
-              if (locationLinks.length >= 3) {
-                const countryIndex = locationLinks[0] === 'Home' ? 1 : 0;
-                if (locationLinks.length > countryIndex + 2) {
-                  breadcrumbLocation.regionName = locationLinks[countryIndex + 1];
+                  // If we found all three, we can stop
+                  if (jsonData.cityName && jsonData.countryName && jsonData.regionName) {
+                    return jsonData;
+                  }
+                } catch (e) {
+                  // Not valid JSON, continue
                 }
               }
             }
+          } catch (e) {
+            // Continue to next script
           }
-
-          return breadcrumbLocation;
-        });
-
-        // Use breadcrumb data as fallback
-        if (!location.cityName && breadcrumbData.cityName) {
-          location.cityName = breadcrumbData.cityName;
         }
-        if (!location.regionName && breadcrumbData.regionName) {
-          location.regionName = breadcrumbData.regionName;
+
+        // Method 2: Check window object for booking data
+        if (window.b_hotel_data) {
+          const hotelData = window.b_hotel_data;
+          if (hotelData.city_name && !jsonData.cityName) {
+            jsonData.cityName = hotelData.city_name;
+          }
+          if (hotelData.region_name && !jsonData.regionName) {
+            jsonData.regionName = hotelData.region_name;
+          }
+          if (hotelData.country_name && !jsonData.countryName) {
+            jsonData.countryName = hotelData.country_name;
+          }
         }
-        if (!location.countryName && breadcrumbData.countryName) {
-          location.countryName = breadcrumbData.countryName;
+
+        return jsonData;
+      });
+
+      // Use JSON data as primary source
+      if (jsonLocation.cityName) {
+        location.cityName = jsonLocation.cityName;
+      }
+      if (jsonLocation.regionName) {
+        location.regionName = jsonLocation.regionName;
+      }
+      if (jsonLocation.countryName) {
+        location.countryName = jsonLocation.countryName;
+      }
+
+      // Fallback to schema data if JSON didn't have it
+      if (!location.cityName || !location.regionName || !location.countryName) {
+        if (schemaData && schemaData.address) {
+          const addr = schemaData.address;
+          if (addr.addressLocality && !location.cityName) {
+            location.cityName = addr.addressLocality;
+          }
+          if (addr.addressRegion && !location.regionName) {
+            location.regionName = addr.addressRegion;
+          }
+          if (addr.addressCountry && !location.countryName) {
+            if (typeof addr.addressCountry === 'string') {
+              location.countryName = addr.addressCountry;
+            } else if (addr.addressCountry.name) {
+              location.countryName = addr.addressCountry.name;
+            }
+          }
         }
       }
 
