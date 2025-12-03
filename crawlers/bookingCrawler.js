@@ -514,11 +514,8 @@ class BookingCrawler {
         const sections = container.querySelectorAll('.b0400e5749');
 
         sections.forEach(section => {
-          // Get the label (e.g., "Check-in", "Check-out", "Pets")
-          const labelEl = section.querySelector('.e7addce19e');
-          if (!labelEl) return;
-
-          const label = labelEl.textContent.trim();
+          // Get all text content from section to identify which rule this is
+          const sectionText = section.textContent || '';
 
           // Get the value from the first .b99b6ef58f in .c92998be48
           const valueContainer = section.querySelector('.c92998be48');
@@ -529,12 +526,13 @@ class BookingCrawler {
 
           const value = valueEl.textContent.trim();
 
-          // Map to our field names
-          if (label.toLowerCase().includes('check-in')) {
+          // Identify rule type by searching for keywords in section text
+          // Check-in must be checked before Check-out (to avoid false match)
+          if (sectionText.includes('Check-in') || sectionText.includes('check-in')) {
             rules.checkIn = value;
-          } else if (label.toLowerCase().includes('check-out')) {
+          } else if (sectionText.includes('Check-out') || sectionText.includes('check-out')) {
             rules.checkOut = value;
-          } else if (label.toLowerCase() === 'pets') {
+          } else if (sectionText.includes('Pets') || sectionText.includes('pets')) {
             rules.pets = value;
           }
         });
