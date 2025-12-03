@@ -87,9 +87,20 @@ const ResultModal: React.FC<ResultModalProps> = ({ task, onClose }) => {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <h3 className="text-2xl font-bold text-gray-900 mb-2">{task.result.name}</h3>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <MapPin size={14} className="text-blue-500" />
-                      <span>{task.result.address}</span>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <MapPin size={14} className="text-blue-500" />
+                        <span>{task.result.address}</span>
+                      </div>
+                      {(task.result.cityName || task.result.regionName || task.result.countryName) && (
+                        <div className="flex items-center gap-2 text-sm text-gray-500 pl-5">
+                          <span>
+                            {[task.result.cityName, task.result.regionName, task.result.countryName]
+                              .filter(Boolean)
+                              .join(', ')}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">
