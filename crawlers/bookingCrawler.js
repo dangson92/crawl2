@@ -206,21 +206,21 @@ class BookingCrawler {
           try {
             const content = script.textContent;
 
-            // Look for data that contains location fields
-            if (content.includes('cityName') || content.includes('countryName')) {
+            // Look for data that contains location fields (snake_case format)
+            if (content.includes('city_name') || content.includes('country_name')) {
               // Try to find JSON objects with these fields
-              const jsonMatches = content.matchAll(/\{[^{}]*(?:"cityName"|"countryName"|"regionName")[^{}]*\}/g);
+              const jsonMatches = content.matchAll(/\{[^{}]*(?:"city_name"|"country_name"|"region_name")[^{}]*\}/g);
               for (const match of jsonMatches) {
                 try {
                   const obj = JSON.parse(match[0]);
-                  if (obj.cityName && !jsonData.cityName) {
-                    jsonData.cityName = obj.cityName;
+                  if (obj.city_name && !jsonData.cityName) {
+                    jsonData.cityName = obj.city_name;
                   }
-                  if (obj.regionName && !jsonData.regionName) {
-                    jsonData.regionName = obj.regionName;
+                  if (obj.region_name && !jsonData.regionName) {
+                    jsonData.regionName = obj.region_name;
                   }
-                  if (obj.countryName && !jsonData.countryName) {
-                    jsonData.countryName = obj.countryName;
+                  if (obj.country_name && !jsonData.countryName) {
+                    jsonData.countryName = obj.country_name;
                   }
 
                   // If we found all three, we can stop
