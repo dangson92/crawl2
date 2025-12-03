@@ -510,26 +510,34 @@ class BookingCrawler {
           return null;
         }
 
-        // Extract all text content and parse it
-        const containerText = container.textContent;
+        // Find all rule sections (each has class b0400e5749)
+        const sections = container.querySelectorAll('.b0400e5749');
 
-        // Extract check-in time
-        const checkInMatch = containerText.match(/Check-in[:\s]+([^\n]+?)(?:Check-out|$)/i);
-        if (checkInMatch) {
-          rules.checkIn = checkInMatch[1].trim().split('\n')[0].trim();
-        }
+        sections.forEach(section => {
+          // Get the label (e.g., "Check-in", "Check-out", "Pets")
+          const labelEl = section.querySelector('.e7addce19e');
+          if (!labelEl) return;
 
-        // Extract check-out time
-        const checkOutMatch = containerText.match(/Check-out[:\s]+([^\n]+?)(?:Cancellation|Prepayment|Pets|Children|$)/i);
-        if (checkOutMatch) {
-          rules.checkOut = checkOutMatch[1].trim().split('\n')[0].trim();
-        }
+          const label = labelEl.textContent.trim();
 
-        // Extract pets policy
-        const petsMatch = containerText.match(/Pets[:\s]+([^\n]+?)(?:Children|Age|Cards|Cancellation|$)/i);
-        if (petsMatch) {
-          rules.pets = petsMatch[1].trim();
-        }
+          // Get the value from the first .b99b6ef58f in .c92998be48
+          const valueContainer = section.querySelector('.c92998be48');
+          if (!valueContainer) return;
+
+          const valueEl = valueContainer.querySelector('.b99b6ef58f');
+          if (!valueEl) return;
+
+          const value = valueEl.textContent.trim();
+
+          // Map to our field names
+          if (label.toLowerCase().includes('check-in')) {
+            rules.checkIn = value;
+          } else if (label.toLowerCase().includes('check-out')) {
+            rules.checkOut = value;
+          } else if (label.toLowerCase() === 'pets') {
+            rules.pets = value;
+          }
+        });
 
         return Object.keys(rules).length > 0 ? rules : null;
       });
