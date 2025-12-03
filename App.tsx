@@ -28,6 +28,7 @@ export default function App() {
   const [globalLogs, setGlobalLogs] = useState<LogEntry[]>([]);
   const [showConfig, setShowConfig] = useState(false);
   const [chromePath, setChromePath] = useState<string | null>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
 
   // Refs for logic that runs in intervals/timeouts
   const queueRef = useRef(queue);
@@ -256,6 +257,83 @@ export default function App() {
     exportToExcel(queue);
   };
 
+  const handleDeleteTask = (taskId: string) => {
+    // Delete from database
+    if (window.isElectron && window.electron?.db) {
+      window.electron.db.deleteTask(taskId).catch(err => {
+        addLog(`Error deleting task: ${err.message}`, 'error');
+      });
+    }
+
+    // Remove from queue
+    setQueue(prev => prev.filter(t => t.id !== taskId));
+    setSelectedTaskIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(taskId);
+      return newSet;
+    });
+    addLog('Task deleted', 'info');
+  };
+
+  const handleResetTask = (taskId: string) => {
+    setQueue(prev => prev.map(t =>
+      t.id === taskId
+        ? { ...t, status: TaskStatus.WAITING, progress: 0, error: undefined, result: undefined, finishedAt: undefined }
+        : t
+    ));
+    addLog('Task reset to WAITING', 'info');
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedTaskIds.size === 0) return;
+
+    // Delete from database
+    if (window.isElectron && window.electron?.db) {
+      selectedTaskIds.forEach(taskId => {
+        window.electron.db.deleteTask(taskId).catch(err => {
+          addLog(`Error deleting task ${taskId}: ${err.message}`, 'error');
+        });
+      });
+    }
+
+    // Remove from queue
+    setQueue(prev => prev.filter(t => !selectedTaskIds.has(t.id)));
+    addLog(`Deleted ${selectedTaskIds.size} tasks`, 'info');
+    setSelectedTaskIds(new Set());
+  };
+
+  const handleBulkReset = () => {
+    if (selectedTaskIds.size === 0) return;
+
+    setQueue(prev => prev.map(t =>
+      selectedTaskIds.has(t.id)
+        ? { ...t, status: TaskStatus.WAITING, progress: 0, error: undefined, result: undefined, finishedAt: undefined }
+        : t
+    ));
+    addLog(`Reset ${selectedTaskIds.size} tasks to WAITING`, 'info');
+    setSelectedTaskIds(new Set());
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectedTaskIds.size === queue.length) {
+      setSelectedTaskIds(new Set());
+    } else {
+      setSelectedTaskIds(new Set(queue.map(t => t.id)));
+    }
+  };
+
+  const handleToggleSelect = (taskId: string) => {
+    setSelectedTaskIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
+    });
+  };
+
   // Stats
   const stats: QueueStats = {
     total: queue.length,
@@ -457,13 +535,31 @@ export default function App() {
                >
                  <Plus size={18} /> Add
                </button>
-               <button 
+               <button
                 onClick={handleClearQueue}
                 disabled={isRunning}
                 className="px-4 py-2.5 bg-white hover:bg-red-50 text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
                >
-                 <Trash2 size={14} /> Clear
+                 <Trash2 size={14} /> Clear All
                </button>
+               {selectedTaskIds.size > 0 && (
+                 <>
+                   <button
+                     onClick={handleBulkReset}
+                     disabled={isRunning}
+                     className="px-4 py-2.5 bg-white hover:bg-yellow-50 text-gray-500 hover:text-yellow-600 border border-gray-200 hover:border-yellow-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                   >
+                     <RefreshCw size={14} /> Reset ({selectedTaskIds.size})
+                   </button>
+                   <button
+                     onClick={handleBulkDelete}
+                     disabled={isRunning}
+                     className="px-4 py-2.5 bg-white hover:bg-red-50 text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                   >
+                     <Trash2 size={14} /> Delete ({selectedTaskIds.size})
+                   </button>
+                 </>
+               )}
              </div>
            </div>
         </div>
@@ -482,16 +578,32 @@ export default function App() {
               <table className="w-full text-left border-collapse">
                 <thead className="bg-gray-50 text-xs uppercase text-gray-500 font-bold tracking-wider border-b border-gray-200">
                   <tr>
+                    <th className="p-4 w-12">
+                      <input
+                        type="checkbox"
+                        checked={selectedTaskIds.size === queue.length && queue.length > 0}
+                        onChange={handleToggleSelectAll}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                    </th>
                     <th className="p-4 w-20 text-center">ID</th>
                     <th className="p-4">URL</th>
                     <th className="p-4 w-36">Status</th>
                     <th className="p-4 w-48">Progress</th>
-                    <th className="p-4 w-28 text-right">Action</th>
+                    <th className="p-4 w-32 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-sm">
                   {queue.map(task => (
                     <tr key={task.id} className="hover:bg-blue-50/50 transition-colors group">
+                      <td className="p-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedTaskIds.has(task.id)}
+                          onChange={() => handleToggleSelect(task.id)}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </td>
                       <td className="p-4 text-center text-gray-400 font-mono text-xs font-semibold">{task.id}</td>
                       <td className="p-4">
                         <div className="truncate max-w-md text-gray-700 font-medium" title={task.url}>
@@ -525,12 +637,33 @@ export default function App() {
                         {task.status === TaskStatus.IDLE && <span className="text-gray-300">-</span>}
                       </td>
                       <td className="p-4 text-right">
-                        <button 
-                          onClick={() => setSelectedTask(task)}
-                          className="flex items-center gap-1 ml-auto text-blue-600 hover:text-blue-800 text-xs font-bold bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-all opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0"
-                        >
-                          Details <ChevronRight size={12} />
-                        </button>
+                        <div className="flex items-center gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                          {task.result && (
+                            <button
+                              onClick={() => setSelectedTask(task)}
+                              className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-semibold bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg transition-all"
+                              title="View Details"
+                            >
+                              <Search size={14} />
+                            </button>
+                          )}
+                          {(task.status === TaskStatus.COMPLETED || task.status === TaskStatus.ERROR) && (
+                            <button
+                              onClick={() => handleResetTask(task.id)}
+                              className="flex items-center gap-1 text-yellow-600 hover:text-yellow-800 text-xs font-semibold bg-yellow-50 hover:bg-yellow-100 px-2.5 py-1.5 rounded-lg transition-all"
+                              title="Reset to Waiting"
+                            >
+                              <RefreshCw size={14} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteTask(task.id)}
+                            className="flex items-center gap-1 text-red-600 hover:text-red-800 text-xs font-semibold bg-red-50 hover:bg-red-100 px-2.5 py-1.5 rounded-lg transition-all"
+                            title="Delete Task"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
