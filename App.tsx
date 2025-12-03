@@ -6,7 +6,7 @@ import {
 import { Task, TaskStatus, AppConfig, LogEntry, QueueStats, HotelData } from './types';
 import LogConsole from './components/LogConsole';
 import ResultModal from './components/ResultModal';
-import { exportToExcel } from './utils/excelGenerator';
+import { exportToExcel, exportToJSON } from './utils/excelGenerator';
 
 const INITIAL_CONFIG: AppConfig = {
   concurrency: 2,
@@ -257,6 +257,10 @@ export default function App() {
     exportToExcel(queue);
   };
 
+  const handleExportJSON = () => {
+    exportToJSON(queue);
+  };
+
   const handleDeleteTask = (taskId: string) => {
     // Delete from database
     if (window.isElectron && window.electron?.db) {
@@ -362,29 +366,38 @@ export default function App() {
         <div className="p-5 space-y-6 overflow-y-auto shrink-0 max-h-[70vh] custom-scrollbar">
           
           {/* Action Buttons */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-3">
             <button
               onClick={() => {
                 setIsRunning(!isRunning);
                 if (!isRunning) addLog("Started queue processing.", 'info');
                 else addLog("Paused queue processing.", 'warning');
               }}
-              className={`group flex items-center justify-center gap-2 p-3.5 rounded-xl font-bold transition-all shadow-md active:scale-95 ${
-                isRunning 
-                  ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-transparent shadow-amber-100' 
+              className={`group w-full flex items-center justify-center gap-2 p-3.5 rounded-xl font-bold transition-all shadow-md active:scale-95 ${
+                isRunning
+                  ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-transparent shadow-amber-100'
                   : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg shadow-blue-200 hover:-translate-y-0.5'
               }`}
             >
               {isRunning ? <Pause size={18} className="fill-current" /> : <Play size={18} className="fill-current" />}
               {isRunning ? 'Pause' : 'Start'}
             </button>
-            <button
-              onClick={handleExport}
-              disabled={stats.completed === 0}
-              className="group flex items-center justify-center gap-2 p-3.5 bg-white text-gray-600 hover:text-blue-600 border border-gray-200 hover:border-blue-200 rounded-xl font-semibold shadow-sm hover:shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-            >
-              <Download size={18} className="group-hover:animate-bounce" /> Export
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={handleExport}
+                disabled={stats.completed === 0}
+                className="group flex items-center justify-center gap-2 p-3.5 bg-white text-gray-600 hover:text-green-600 border border-gray-200 hover:border-green-200 rounded-xl font-semibold shadow-sm hover:shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+              >
+                <Download size={18} className="group-hover:animate-bounce" /> Excel
+              </button>
+              <button
+                onClick={handleExportJSON}
+                disabled={stats.completed === 0}
+                className="group flex items-center justify-center gap-2 p-3.5 bg-white text-gray-600 hover:text-blue-600 border border-gray-200 hover:border-blue-200 rounded-xl font-semibold shadow-sm hover:shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+              >
+                <Download size={18} className="group-hover:animate-bounce" /> JSON
+              </button>
+            </div>
           </div>
 
           {/* Configuration */}
