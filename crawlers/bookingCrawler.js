@@ -514,25 +514,32 @@ class BookingCrawler {
         const sections = container.querySelectorAll('.b0400e5749');
 
         sections.forEach(section => {
-          // Get all text content from section to identify which rule this is
-          const sectionText = section.textContent || '';
-
-          // Get the value from the first .b99b6ef58f in .c92998be48
+          // Get heading/label text (before the value container)
+          // The heading is typically in the first part of the section, before .c92998be48
           const valueContainer = section.querySelector('.c92998be48');
           if (!valueContainer) return;
 
+          // Get heading text by getting all text BEFORE value container
+          // We'll clone the section, remove value container, then get text
+          const sectionClone = section.cloneNode(true);
+          const valueContainerClone = sectionClone.querySelector('.c92998be48');
+          if (valueContainerClone) {
+            valueContainerClone.remove();
+          }
+          const headingText = sectionClone.textContent.trim();
+
+          // Get the value from the first .b99b6ef58f
           const valueEl = valueContainer.querySelector('.b99b6ef58f');
           if (!valueEl) return;
 
           const value = valueEl.textContent.trim();
 
-          // Identify rule type by searching for keywords in section text
-          // Check-in must be checked before Check-out (to avoid false match)
-          if (sectionText.includes('Check-in') || sectionText.includes('check-in')) {
+          // Identify rule type by exact heading text match
+          if (headingText === 'Check-in') {
             rules.checkIn = value;
-          } else if (sectionText.includes('Check-out') || sectionText.includes('check-out')) {
+          } else if (headingText === 'Check-out') {
             rules.checkOut = value;
-          } else if (sectionText.includes('Pets') || sectionText.includes('pets')) {
+          } else if (headingText === 'Pets') {
             rules.pets = value;
           }
         });
