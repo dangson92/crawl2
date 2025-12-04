@@ -320,13 +320,14 @@ class BookingCrawler {
    */
   async getRating(schemaData = null) {
     try {
-      // Try to get from DOM - look for rating-stars element
+      // Try to get from DOM - look for rating elements
       const rating = await this.page.evaluate(() => {
-        // Look for elements with data-testid="rating-stars" or similar
+        // Look for elements with data-testid="quality-rating" or "rating-squares"
         const ratingSelectors = [
+          '[data-testid="quality-rating"]',
+          '[data-testid="rating-squares"]',
           '[data-testid="rating-stars"]',
-          '[aria-label*="out of 5 stars"]',
-          '[aria-label*="star rating"]',
+          '[aria-label*="out of 5"]',
         ];
 
         for (const selector of ratingSelectors) {
@@ -336,8 +337,8 @@ class BookingCrawler {
             const ariaLabel = element.getAttribute('aria-label');
             const text = ariaLabel || element.textContent;
 
-            // Match patterns like "4 out of 5 stars"
-            const match = text.match(/(\d+)\s*out\s*of\s*\d+\s*stars?/i);
+            // Match patterns like "3 out of 5 quality rating" or "4 out of 5 stars"
+            const match = text.match(/(\d+)\s*out\s*of\s*\d+/i);
             if (match) {
               return parseFloat(match[1]);
             }
