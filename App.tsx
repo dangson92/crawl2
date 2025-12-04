@@ -140,15 +140,14 @@ export default function App() {
         result = {
           name: crawlerData.name || 'Unknown Hotel',
           address: crawlerData.address || 'No address',
-          rating: crawlerData.rating?.score || 0,
+          rating: crawlerData.rating || 0,
           images: crawlerData.images || [],
           // Store additional data
           facilities: crawlerData.facilities,
           faqs: crawlerData.faqs,
           about: crawlerData.about,
-          reviewCount: crawlerData.rating?.reviewCount,
-          ratingCategory: crawlerData.rating?.category,
           houseRules: crawlerData.houseRules,
+          hotelAreaInfo: crawlerData.hotelAreaInfo,
           // Location data
           cityName: crawlerData.cityName,
           regionName: crawlerData.regionName,
