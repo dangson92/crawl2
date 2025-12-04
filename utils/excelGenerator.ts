@@ -12,6 +12,21 @@ export const exportToExcel = (tasks: Task[]) => {
   // Flatten data for Excel
   const data = completedTasks.map(task => {
     const hotel = task.result!;
+
+    // Format hotel area info for Excel
+    const formatHotelAreaInfo = (areaInfo?: any[]) => {
+      if (!areaInfo || areaInfo.length === 0) return '';
+
+      return areaInfo.map(category => {
+        const header = `${category.category}:`;
+        const items = category.items.map((item: any) => {
+          const type = item.type ? `[${item.type}] ` : '';
+          return `  ${type}${item.name} - ${item.distance}`;
+        }).join('\n');
+        return `${header}\n${items}`;
+      }).join('\n\n');
+    };
+
     return {
       'URL': task.url,
       'Hotel Name': hotel.name,
@@ -19,14 +34,13 @@ export const exportToExcel = (tasks: Task[]) => {
       'City': hotel.cityName || '',
       'Region': hotel.regionName || '',
       'Country': hotel.countryName || '',
-      'Rating': hotel.rating,
-      'Rating Category': hotel.ratingCategory || '',
-      'Review Count': hotel.reviewCount || '',
+      'Star Rating': hotel.rating || '',
       'About': hotel.about || '',
       'Facilities': hotel.facilities?.join(', ') || '',
       'Check-in': hotel.houseRules?.checkIn || '',
       'Check-out': hotel.houseRules?.checkOut || '',
       'Pets': hotel.houseRules?.pets || '',
+      'Hotel Area Info': formatHotelAreaInfo(hotel.hotelAreaInfo),
       'FAQs': hotel.faqs?.map(faq => `Q: ${faq.question}\nA: ${faq.answer}`).join('\n\n') || '',
       'All Images (Comma Separated)': hotel.images.join(', '),
       'Status': task.status,

@@ -316,112 +316,51 @@ class BookingCrawler {
   }
 
   /**
-   * Get hotel rating
+   * Get hotel star rating (hotel classification, not review rating)
    */
   async getRating(schemaData = null) {
     try {
-      const result = {
-        score: null,
-        reviewCount: null,
-        category: null
-      };
+      // Try to get from DOM - look for rating-stars element
+      const rating = await this.page.evaluate(() => {
+        // Look for elements with data-testid="rating-stars" or similar
+        const ratingSelectors = [
+          '[data-testid="rating-stars"]',
+          '[aria-label*="out of 5 stars"]',
+          '[aria-label*="star rating"]',
+        ];
 
-      // Try to get from schema first
-      if (schemaData && schemaData.aggregateRating) {
-        const aggRating = schemaData.aggregateRating;
-        if (aggRating.ratingValue) {
-          result.score = parseFloat(aggRating.ratingValue);
+        for (const selector of ratingSelectors) {
+          const element = document.querySelector(selector);
+          if (element) {
+            // Try to get from aria-label or text content
+            const ariaLabel = element.getAttribute('aria-label');
+            const text = ariaLabel || element.textContent;
+
+            // Match patterns like "4 out of 5 stars"
+            const match = text.match(/(\d+)\s*out\s*of\s*\d+\s*stars?/i);
+            if (match) {
+              return parseFloat(match[1]);
+            }
+          }
         }
-        if (aggRating.reviewCount) {
-          result.reviewCount = parseInt(aggRating.reviewCount);
+
+        // Fallback: look for star rating in structured data
+        const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+        for (const script of scripts) {
+          try {
+            const data = JSON.parse(script.textContent);
+            if (data.starRating && data.starRating.ratingValue) {
+              return parseFloat(data.starRating.ratingValue);
+            }
+          } catch (e) {
+            // Skip invalid JSON
+          }
         }
-      }
 
-      // If we got both from schema, determine category based on score
-      if (result.score) {
-        if (result.score >= 9) result.category = 'Excellent';
-        else if (result.score >= 8) result.category = 'Very Good';
-        else if (result.score >= 7) result.category = 'Good';
-        else if (result.score >= 6) result.category = 'Pleasant';
-        else result.category = 'Fair';
-      }
+        return null;
+      });
 
-      // Fallback to DOM selectors if schema didn't provide data
-      if (!result.score || !result.reviewCount) {
-        const domRating = await this.page.evaluate(() => {
-          const domResult = {
-            score: null,
-            reviewCount: null,
-            category: null
-          };
-
-          // Try to get score
-          const scoreSelectors = [
-            '[data-testid="review-score-component"] div[aria-label]',
-            '.b5cd09854e.d10a6220b4',
-            '.a3b8729ab1.d86cee9b25',
-          ];
-
-          for (const selector of scoreSelectors) {
-            const element = document.querySelector(selector);
-            if (element) {
-              const text = element.textContent.trim();
-              const scoreMatch = text.match(/(\d+\.?\d*)/);
-              if (scoreMatch) {
-                domResult.score = parseFloat(scoreMatch[1]);
-                break;
-              }
-            }
-          }
-
-          // Try to get review count
-          const reviewSelectors = [
-            '[data-testid="review-score-component"]',
-            '.d8eab2cf7f.c90c0a70d3',
-          ];
-
-          for (const selector of reviewSelectors) {
-            const element = document.querySelector(selector);
-            if (element) {
-              const text = element.textContent;
-              const countMatch = text.match(/(\d{1,3}(,\d{3})*)/);
-              if (countMatch) {
-                domResult.reviewCount = parseInt(countMatch[1].replace(/,/g, ''));
-                break;
-              }
-            }
-          }
-
-          // Try to get category
-          const categorySelectors = [
-            '[data-testid="review-score-component"]',
-          ];
-
-          for (const selector of categorySelectors) {
-            const element = document.querySelector(selector);
-            if (element) {
-              const text = element.textContent;
-              const words = ['Excellent', 'Very Good', 'Good', 'Pleasant', 'Fair', 'Review score'];
-              for (const word of words) {
-                if (text.includes(word)) {
-                  domResult.category = word;
-                  break;
-                }
-              }
-              if (domResult.category) break;
-            }
-          }
-
-          return domResult;
-        });
-
-        // Use DOM data as fallback
-        if (!result.score && domRating.score) result.score = domRating.score;
-        if (!result.reviewCount && domRating.reviewCount) result.reviewCount = domRating.reviewCount;
-        if (!result.category && domRating.category) result.category = domRating.category;
-      }
-
-      return result;
+      return rating;
     } catch (error) {
       return null;
     }
@@ -688,6 +627,78 @@ class BookingCrawler {
   }
 
   /**
+   * Get hotel area information (nearby places, restaurants, attractions, etc.)
+   */
+  async getHotelAreaInfo() {
+    try {
+      const areaInfo = await this.page.evaluate(() => {
+        const result = [];
+
+        // Find the location block container
+        const locationContainer = document.querySelector('div[data-testid="location-block-container"]');
+        if (!locationContainer) {
+          return result;
+        }
+
+        // Find all poi-block elements (each represents a category)
+        const poiBlocks = locationContainer.querySelectorAll('div[data-testid="poi-block"]');
+
+        poiBlocks.forEach(block => {
+          // Get category name from h3
+          const categoryElement = block.querySelector('h3');
+          if (!categoryElement) return;
+
+          const category = categoryElement.textContent.trim();
+
+          // Get all items in this category
+          const itemsList = block.querySelector('ul[data-testid="poi-block-list"]');
+          if (!itemsList) return;
+
+          const items = [];
+          const listItems = itemsList.querySelectorAll('li');
+
+          listItems.forEach(li => {
+            // Get the name and distance
+            const nameElement = li.querySelector('.aa225776f2.ca9d921c46, .d1bc97eb82');
+            const distanceElement = li.querySelector('.b99b6ef58f.fb14de7f14.a0a56631d6');
+
+            if (nameElement && distanceElement) {
+              // Check if there's a type label (like "Restaurant", "Cafe/Bar", etc.)
+              const typeElement = li.querySelector('.ea6d30da3a');
+              const type = typeElement ? typeElement.textContent.trim() : null;
+
+              // Get the full name text, excluding the type label if present
+              let name = nameElement.textContent.trim();
+              if (type && name.startsWith(type)) {
+                name = name.substring(type.length).trim();
+              }
+
+              items.push({
+                name: name,
+                distance: distanceElement.textContent.trim(),
+                ...(type && { type: type })
+              });
+            }
+          });
+
+          if (items.length > 0) {
+            result.push({
+              category: category,
+              items: items
+            });
+          }
+        });
+
+        return result;
+      });
+
+      return areaInfo;
+    } catch (error) {
+      return [];
+    }
+  }
+
+  /**
    * Get images from gallery popup
    */
   async getImages(url) {
@@ -813,6 +824,8 @@ class BookingCrawler {
 
       const faqs = await this.getFAQs();
 
+      const hotelAreaInfo = await this.getHotelAreaInfo();
+
       // Get images separately as it requires navigation
       const images = await this.getImages(url);
 
@@ -829,6 +842,7 @@ class BookingCrawler {
         cityName: locationDetails.cityName,
         regionName: locationDetails.regionName,
         countryName: locationDetails.countryName,
+        hotelAreaInfo,
         crawledAt: new Date().toISOString(),
       };
 

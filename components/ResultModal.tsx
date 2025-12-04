@@ -104,15 +104,12 @@ const ResultModal: React.FC<ResultModalProps> = ({ task, onClose }) => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="flex items-center gap-1 bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200 mb-1">
-                      <Star size={16} className="fill-yellow-400 text-yellow-400" />
-                      <span className="text-lg font-bold text-yellow-700">{task.result.rating}</span>
-                    </div>
-                    {task.result.ratingCategory && (
-                      <div className="text-xs font-semibold text-yellow-600">{task.result.ratingCategory}</div>
-                    )}
-                    {task.result.reviewCount && (
-                      <div className="text-xs text-gray-500 mt-1">{task.result.reviewCount} reviews</div>
+                    {task.result.rating && (
+                      <div className="flex items-center gap-1 bg-yellow-50 px-3 py-2 rounded-lg border border-yellow-200">
+                        <Star size={16} className="fill-yellow-400 text-yellow-400" />
+                        <span className="text-lg font-bold text-yellow-700">{task.result.rating}</span>
+                        <span className="text-xs text-gray-500">stars</span>
+                      </div>
                     )}
                   </div>
                 </div>

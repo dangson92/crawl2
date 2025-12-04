@@ -12,6 +12,15 @@ export interface LogEntry {
   type: 'info' | 'success' | 'error' | 'warning';
 }
 
+export interface HotelAreaInfo {
+  category: string;
+  items: Array<{
+    name: string;
+    distance: string;
+    type?: string;
+  }>;
+}
+
 export interface HotelData {
   name: string;
   address: string;
@@ -21,8 +30,6 @@ export interface HotelData {
   facilities?: string[];
   faqs?: Array<{ question: string; answer: string }>;
   about?: string;
-  reviewCount?: number;
-  ratingCategory?: string;
   houseRules?: {
     checkIn?: string;
     checkOut?: string;
@@ -32,6 +39,7 @@ export interface HotelData {
   countryName?: string;
   regionName?: string;
   cityName?: string;
+  hotelAreaInfo?: HotelAreaInfo[];
 }
 
 export interface Task {
